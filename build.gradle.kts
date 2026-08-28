@@ -1,9 +1,10 @@
 plugins {
-    kotlin("jvm") version "2.3.21"
-    kotlin("plugin.spring") version "2.3.21"
     id("org.springframework.boot") version "4.1.0"
     id("io.spring.dependency-management") version "1.1.7"
-    id("app.cash.sqldelight") version "2.3.2"
+    kotlin("jvm") version "2.2.20"
+    kotlin("plugin.spring") version "2.2.20"
+    kotlin("plugin.jpa") version "2.2.20"
+    kotlin("kapt") version "2.2.20"
 }
 
 group = "org.example"
@@ -23,27 +24,22 @@ repositories {
 dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
+    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("app.cash.sqldelight:runtime:2.3.2")
-    implementation("app.cash.sqldelight:jdbc-driver:2.3.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("io.arrow-kt:arrow-core:2.1.2")
     implementation("io.arrow-kt:arrow-fx-coroutines:2.1.2")
+    implementation("org.mapstruct:mapstruct:1.6.3")
+    kapt("org.mapstruct:mapstruct-processor:1.6.3")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
     runtimeOnly("org.postgresql:postgresql")
     testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.testcontainers:postgresql:1.20.4")
+    testImplementation("org.testcontainers:junit-jupiter:1.20.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-sqldelight {
-    databases {
-        create("Database") {
-            packageName.set("org.example.parkinglotsimulator.db")
-            dialect("app.cash.sqldelight:postgresql-dialect:2.3.2")
-        }
-    }
 }
 
 kotlin {

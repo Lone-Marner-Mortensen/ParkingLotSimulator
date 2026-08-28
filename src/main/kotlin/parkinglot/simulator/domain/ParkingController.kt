@@ -10,7 +10,10 @@ import parkinglot.simulator.domain.connector.LicensePlateReader
 import parkinglot.simulator.domain.connector.ParkingGuardNotifier
 import parkinglot.simulator.domain.connector.PaymentStatusChecker
 import parkinglot.simulator.domain.connector.VehicleSizeEstimator
+import parkinglot.simulator.domain.model.DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS
 import parkinglot.simulator.domain.model.SensorEvent.*
+import parkinglot.simulator.domain.repository.ParkingSpotRepository
+import parkinglot.simulator.domain.repository.VehicleTransitRepository
 
 class ParkingController(
     private val eventPublisher: EventPublisher,
@@ -18,6 +21,8 @@ class ParkingController(
     val vehicleSizeEstimator: VehicleSizeEstimator,
     val paymentStatusChecker: PaymentStatusChecker,
     val parkingGuardNotifier: ParkingGuardNotifier,
+    private val vehicleTransitRepository: VehicleTransitRepository,
+    private val parkingSpotRepository: ParkingSpotRepository,
     private val coroutineScope: CoroutineScope
 ) {
 
@@ -51,9 +56,9 @@ class ParkingController(
 
     private suspend fun onVehicleEntering(event: VehicleEnteringEvent) {
         parZip(
-            { licensePlateReader.read(event.location) },
-            { vehicleSizeEstimator.isVehicleTooBig(event.location) },
-            { paymentStatusChecker.isPaymentComplete(event.location) }
+            { licensePlateReader.read() },
+            { vehicleSizeEstimator.isVehicleTooBig() },
+            { paymentStatusChecker.isPaymentComplete() }
         ) { plate, size, payment ->
             either {
                 size.bind()
@@ -61,38 +66,53 @@ class ParkingController(
                 plate.bind()
             }
         }.fold(
-            { reason -> parkingGuardNotifier.denyEntry(event.location, reason) },
-            { licensePlate -> //Update number of cars entering
+            { reason -> parkingGuardNotifier.denyEntry(reason) },
+            { plate ->
+                if(getNumberOfVehiclesWhoCanEnter() > 0) {
+                    vehicleTransitRepository.addVehicleInTransit(plate)
+                }
+                else {
+                    // This happens only in very rare occasions because people can't go to the payment machine if
+                    // there are no available parking spots. However sometimes the sensor system make mistakes
+                    // If it happens the client will get his money back unless he/she decides to wait for a spot to be released.
+                    parkingGuardNotifier.denyEntry(NO_AVAILABLE_PARKING_SPOTS)
+                }
             }
         )
     }
 
     private fun onVehicleLeavingEvent(event: VehicleLeavingEvent) {
-        //Update number of cars leaving in database
+        // If the vehicle is already in transit, nothing happens.
+        vehicleTransitRepository.addVehicleInTransit(event.licensePlate.value)
     }
 
     private fun onParkingSpotOccupiedEvent(event: ParkingSpotOccupiedEvent) {
-        //Update parking spot occupied in database
+        parkingSpotRepository.occupyParkingSpot(event.licensePlate, event.spotId)
+        vehicleTransitRepository.removeVehicleInTransit(event.licensePlate.value)
     }
 
     private fun onParkingSpotReleasedEvent(event: ParkingSpotReleasedEvent) {
-        //Update parking spot released in database
+        parkingSpotRepository.releaseParkingSpot(event.licensePlate, event.spotId)
+        vehicleTransitRepository.removeVehicleInTransit(event.licensePlate.value)
     }
 
     private fun onOverStayingEvent(event: OverStayingEvent) {
-        parkingGuardNotifier.vehicleHasOverStayed(event.plateNumber, event.spotId, event.duration)
+        parkingGuardNotifier.vehicleHasOverStayed(event.licensePlate, event.spotId, event.duration)
     }
 
-    fun getNumberOfCarsWhoCanEnter(): Int {
-        // Get number of available parking spots from database
-        // Get number of cars leaving from database
-        // Get number of cars entering from database
+    fun getNumberOfVehiclesWhoCanEnter(): Int {
 
-        TODO("Implement logic to return the number of cars who can enter")
+        val numberOfVehiclesInTransit = vehicleTransitRepository.getNumberOfVehiclesInTransit()
+        val numberOfFreeParkingSpots = parkingSpotRepository.getFreeParkingSpots().size
+
+        // Since the vehicle-entering event are treated sequentially (see README),
+        // and there are no significant delay in registering the implications (regarding number
+        // of available parking spots) of the other events, we can trust the calculation.
+        return numberOfFreeParkingSpots - numberOfVehiclesInTransit
     }
 
-    fun getFreeParkingSpots(): Int {
-        TODO("Implement logic to return the number of free parking spots")
+    fun getFreeParkingSpots(): List<String> {
+        return parkingSpotRepository.getFreeParkingSpots()
     }
 
     fun stopSystem() {
