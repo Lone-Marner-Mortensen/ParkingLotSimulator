@@ -1,32 +1,29 @@
 package parkinglot.simulator.repository
 
 import org.springframework.stereotype.Repository
-import parkinglot.simulator.domain.model.LicensePlate
-import parkinglot.simulator.domain.model.ParkingSpot
-import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.repository.ParkingSpotRepository
 import parkinglot.simulator.repository.jpa.adapter.ParkingSpotEntityRepository
-import parkinglot.simulator.repository.mapper.ParkingSpotDtoMapper
+import parkinglot.simulator.repository.mapper.ParkingSpotEntityMapper
 
 @Repository
 class ParkingSpotRepositoryImpl(
     private val jpaRepository: ParkingSpotEntityRepository,
-    private val mapper: ParkingSpotDtoMapper
+    private val mapper: ParkingSpotEntityMapper
 ) : ParkingSpotRepository {
 
-    override fun occupyParkingSpot(licensePlate: LicensePlate, spotId: ParkingSpotId) {
-        jpaRepository.findById(spotId.value).orElseThrow()
+    override fun occupyParkingSpot(licensePlate: String, spotId: String) {
+        jpaRepository.findById(spotId).orElseThrow()
             .let(mapper::toDomain)
-            .let { it.copy(licensePlate = licensePlate.value) }
-            .let(mapper::toDto)
+            .let { it.copy(licensePlate = licensePlate) }
+            .let(mapper::toEntity)
             .let(jpaRepository::save)
     }
 
-    override fun releaseParkingSpot(licensePlate: LicensePlate, spotId: ParkingSpotId) {
-        jpaRepository.findById(spotId.value).orElseThrow()
+    override fun releaseParkingSpot(licensePlate: String, spotId: String) {
+        jpaRepository.findById(spotId).orElseThrow()
             .let(mapper::toDomain)
             .let { it.copy(licensePlate = null) }
-            .let(mapper::toDto)
+            .let(mapper::toEntity)
             .let(jpaRepository::save)
     }
 

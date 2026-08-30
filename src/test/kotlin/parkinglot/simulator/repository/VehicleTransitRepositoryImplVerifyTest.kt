@@ -45,7 +45,7 @@ class VehicleTransitRepositoryImplVerifyTest {
     private lateinit var jpaRepository: VehicleTransitEntityRepository
 
     @Test
-    fun `addVehicleInTransit adds the license plate`() {
+    fun `addVehicleInTransit adds the license plate to vehicleInTransit list`() {
         val licensePlate = "AB123CD"
 
         repository.addVehicleInTransit(licensePlate)
@@ -61,12 +61,12 @@ class VehicleTransitRepositoryImplVerifyTest {
         repository.addVehicleInTransit(licensePlate)
         repository.addVehicleInTransit(licensePlate)
 
-        assertEquals(before.toInt() + 1, repository.getNumberOfVehiclesInTransit())
+        assertEquals(before + 1, repository.getNumberOfVehiclesInTransit())
         assertTrue(jpaRepository.existsById(licensePlate))
     }
 
     @Test
-    fun `removeVehicleInTransit removes the license plate`() {
+    fun `removeVehicleInTransit removes the license plate from vehicleInTransit list`() {
         val licensePlate = "CD456EF"
         repository.addVehicleInTransit(licensePlate)
 
@@ -76,11 +76,11 @@ class VehicleTransitRepositoryImplVerifyTest {
     }
 
     @Test
-    fun `getNumberOfVehiclesInTransit returns current count`() {
+    fun `getNumberOfVehiclesInTransit returns current license plate count`() {
         val before = jpaRepository.count()
 
         repository.addVehicleInTransit("EF789GH")
 
-        assertEquals(before.toInt() + 1, repository.getNumberOfVehiclesInTransit())
+        assertEquals(before + 1, repository.getNumberOfVehiclesInTransit())
     }
 }

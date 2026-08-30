@@ -25,6 +25,7 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-flyway")
     implementation("org.flywaydb:flyway-database-postgresql")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     implementation("io.arrow-kt:arrow-core:2.1.2")
@@ -37,8 +38,10 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-starter-flyway-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("io.mockk:mockk:1.13.13")
     testImplementation("org.testcontainers:postgresql:1.20.4")
     testImplementation("org.testcontainers:junit-jupiter:1.20.4")
+    testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
@@ -60,11 +63,6 @@ val composeDown = tasks.register<Exec>("composeDown") {
     commandLine("docker", "compose", "down")
 }
 
-val killApp = tasks.register<Exec>("killApp") {
-    commandLine("pkill", "-f", "org.example.parkinglotsimulator.ParkingLotSimulatorApplicationKt")
-    isIgnoreExitValue = true
-}
-
 tasks.named("bootRun") {
     mustRunAfter(composeUp)
 }
@@ -77,10 +75,6 @@ tasks.register("start") {
 
 tasks.register("stop") {
     group = "application"
-    description = "Stops the application (if running) and stops/removes the Postgres container."
-    dependsOn(killApp, composeDown)
-}
-
-tasks.named("composeDown") {
-    mustRunAfter(killApp)
+    description = "Stops and removes the Postgres container. Stop the application from its owning process."
+    dependsOn(composeDown)
 }

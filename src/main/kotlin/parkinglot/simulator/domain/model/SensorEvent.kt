@@ -1,18 +1,41 @@
 package parkinglot.simulator.domain.model
 
 import kotlin.time.Duration
-
-
-@JvmInline
-value class ParkingSpotId(val value: String)
-
-@JvmInline
-value class LicensePlate(val value: String)
+import java.util.UUID
 
 sealed interface SensorEvent {
-    data object VehicleEnteringEvent : SensorEvent
-    data class ParkingSpotOccupiedEvent(val licensePlate: LicensePlate, val spotId: ParkingSpotId) : SensorEvent
-    data class ParkingSpotReleasedEvent(val licensePlate: LicensePlate, val spotId: ParkingSpotId) : SensorEvent
-    data class VehicleLeavingEvent(val licensePlate: LicensePlate, val spotId: ParkingSpotId) : SensorEvent
-    data class OverStayingEvent(val licensePlate: LicensePlate, val spotId: ParkingSpotId, val duration: Duration) : SensorEvent
+    val eventId: String
+
+    data class VehicleEnteringEvent(
+        override val eventId: String = newEventId()
+    ) : SensorEvent
+
+    data class ParkingSpotOccupiedEvent(
+        val licensePlate: String,
+        val spotId: String,
+        override val eventId: String = newEventId()
+    ) : SensorEvent
+
+    data class ParkingSpotReleasedEvent(
+        val licensePlate: String,
+        val spotId: String,
+        override val eventId: String = newEventId()
+    ) : SensorEvent
+
+    data class VehicleLeavingEvent(
+        val licensePlate: String,
+        val spotId: String,
+        override val eventId: String = newEventId()
+    ) : SensorEvent
+
+    data class OverStayingEvent(
+        val licensePlate: String,
+        val spotId: String,
+        val duration: Duration,
+        override val eventId: String = newEventId()
+    ) : SensorEvent
+
+    companion object {
+        private fun newEventId(): String = UUID.randomUUID().toString()
+    }
 }

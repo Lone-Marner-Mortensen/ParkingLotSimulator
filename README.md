@@ -2,14 +2,17 @@
 
 A parking lot simulation project built with Spring Boot. </br>
 It gives the number of cars who can enter the parking lot and what spots are available. </br> </br>
-A lot of classes/implementation are abstracted away. </br>
-We pretend that there are a sensor system, payment system and a parking guard notification system 
-that we can connect to. </br>
+**A lot of classes/implementations are abstracted away.** </br>
+**We pretend that there are a sensor system, payment system and a parking guard notification system
+that we can connect to.** </br>
 It's not a project that is meant to go live.</br>
+
+The project is a kind of hexagonal architecture. </br>
+Everything depends on the domain, which exposes interfaces (also called ports) to the other components. 
 
 ## Overview
 
-The simulator is designed around a `ParkingController` that listens for sensor events such as:
+The simulator is designed around a `ParkingController` that listens to sensor events such as:
 
 | Event | Meaning                                                                                                |
 | --- |--------------------------------------------------------------------------------------------------------|

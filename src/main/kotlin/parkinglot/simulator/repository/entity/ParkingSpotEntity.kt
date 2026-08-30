@@ -1,4 +1,4 @@
-package parkinglot.simulator.repository.dto
+package parkinglot.simulator.repository.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
@@ -7,7 +7,7 @@ import jakarta.persistence.Table
 
 @Entity
 @Table(name = "parking_spots")
-class ParkingSpotDto(
+class ParkingSpotEntity(
     @Id
     val spot: String,
 

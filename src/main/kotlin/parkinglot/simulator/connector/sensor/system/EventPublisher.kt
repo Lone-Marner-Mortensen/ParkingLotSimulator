@@ -1,21 +1,19 @@
 package parkinglot.simulator.connector.sensor.system
 
-import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.receiveAsFlow
+import org.springframework.stereotype.Component
+import parkinglot.simulator.domain.connector.SensorEventSource
 import parkinglot.simulator.domain.model.SensorEvent
 
-class EventPublisher(
-    private val scope: CoroutineScope
-) {
-    private val events = MutableSharedFlow<SensorEvent>()
+@Component
+class EventPublisher : SensorEventSource {
+    private val events = Channel<SensorEvent>(Channel.UNLIMITED)
 
-    fun observeEvents(): Flow<SensorEvent> = events
+    override fun observeEvents(): Flow<SensorEvent> = events.receiveAsFlow()
 
     fun simulateEventEmissions(eventsToEmit: List<SensorEvent>) {
-        scope.launch {
-            eventsToEmit.forEach { event -> events.emit(event) }
-        }
+        eventsToEmit.forEach { event -> events.trySend(event).getOrThrow() }
     }
 }
