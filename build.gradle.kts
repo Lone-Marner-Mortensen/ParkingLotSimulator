@@ -31,6 +31,7 @@ dependencies {
     implementation("io.arrow-kt:arrow-core:2.1.2")
     implementation("io.arrow-kt:arrow-fx-coroutines:2.1.2")
     implementation("org.mapstruct:mapstruct:1.6.3")
+    implementation("org.awaitility:awaitility-kotlin:4.3.0")
     kapt("org.mapstruct:mapstruct-processor:1.6.3")
     developmentOnly("org.springframework.boot:spring-boot-devtools")
     developmentOnly("org.springframework.boot:spring-boot-docker-compose")
@@ -41,7 +42,6 @@ dependencies {
     testImplementation("io.mockk:mockk:1.13.13")
     testImplementation("org.testcontainers:postgresql:1.20.4")
     testImplementation("org.testcontainers:junit-jupiter:1.20.4")
-    testImplementation("org.awaitility:awaitility-kotlin:4.3.0")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 

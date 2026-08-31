@@ -14,7 +14,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @SpringBootTest
-class VehicleTransitRepositoryImplVerifyTest {
+class VehicleTransitRepositoryImplTest {
 
     companion object {
         private val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
@@ -56,7 +56,7 @@ class VehicleTransitRepositoryImplVerifyTest {
     @Test
     fun `addVehicleInTransit is idempotent and doesn't throw exception when inserting a licensePlate twice`() {
         val licensePlate = "IJ012KL"
-        val before = jpaRepository.count()
+        val before = jpaRepository.count().toInt()
 
         repository.addVehicleInTransit(licensePlate)
         repository.addVehicleInTransit(licensePlate)
@@ -77,7 +77,7 @@ class VehicleTransitRepositoryImplVerifyTest {
 
     @Test
     fun `getNumberOfVehiclesInTransit returns current license plate count`() {
-        val before = jpaRepository.count()
+        val before = jpaRepository.count().toInt()
 
         repository.addVehicleInTransit("EF789GH")
 

@@ -22,5 +22,11 @@ class VehicleTransitRepositoryImpl(
         jpaRepository.deleteById(licensePlate)
     }
 
-    override fun getNumberOfVehiclesInTransit(): Long = jpaRepository.count()
+    override fun removeAllVehiclesInTransit() {
+        jpaRepository.deleteAll()
+    }
+
+    override fun getNumberOfVehiclesInTransit(): Int = jpaRepository.count().toInt()
+
+    override fun existsByLicensePlate(licensePlate: String): Boolean = jpaRepository.existsById(licensePlate)
 }

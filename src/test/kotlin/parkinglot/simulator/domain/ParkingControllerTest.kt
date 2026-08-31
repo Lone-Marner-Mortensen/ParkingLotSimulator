@@ -15,6 +15,8 @@ import parkinglot.simulator.domain.connector.ParkingGuardNotifier
 import parkinglot.simulator.domain.connector.PaymentStatusChecker
 import parkinglot.simulator.domain.connector.VehicleSizeEstimator
 import parkinglot.simulator.domain.model.DenyEntryReason
+import parkinglot.simulator.domain.model.LicensePlate
+import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
 import kotlin.time.Duration.Companion.minutes
@@ -34,14 +36,16 @@ class ParkingControllerTest {
         vehicleTransitRepository,
         parkingLifecycleService
     )
-    private val licensePlate = "AB123CD"
+    private val licensePlate = "AB123CD123"
     private val spotId = "A1"
+    private val licensePlateValue = LicensePlate(licensePlate)
+    private val spotIdValue = ParkingSpotId(spotId)
 
     @Test
     fun `spot and transit events delegate to their use cases`() = runTest {
-        handler.handle(SensorEvent.ParkingSpotOccupiedEvent(licensePlate, spotId))
-        handler.handle(SensorEvent.ParkingSpotReleasedEvent(licensePlate, spotId))
-        handler.handle(SensorEvent.VehicleLeavingEvent(licensePlate, spotId))
+        handler.handle(SensorEvent.ParkingSpotOccupiedEvent(licensePlateValue, spotIdValue))
+        handler.handle(SensorEvent.ParkingSpotReleasedEvent(licensePlateValue, spotIdValue))
+        handler.handle(SensorEvent.VehicleLeavingEvent(licensePlateValue, spotIdValue))
 
         verify { parkingLifecycleService.occupyParkingSpot(licensePlate, spotId) }
         verify { parkingLifecycleService.releaseParkingSpot(licensePlate, spotId) }
@@ -50,7 +54,7 @@ class ParkingControllerTest {
 
     @Test
     fun `overstay event notifies guard`() = runTest {
-        handler.handle(SensorEvent.OverStayingEvent(licensePlate, spotId, 15.minutes))
+        handler.handle(SensorEvent.OverStayingEvent(licensePlateValue, spotIdValue, 15.minutes))
 
         verify { parkingGuardNotifier.vehicleHasOverStayed(licensePlate, spotId, 15.minutes) }
     }

@@ -11,26 +11,26 @@ sealed interface SensorEvent {
     ) : SensorEvent
 
     data class ParkingSpotOccupiedEvent(
-        val licensePlate: String,
-        val spotId: String,
+        val licensePlate: LicensePlate,
+        val spotId: ParkingSpotId,
         override val eventId: String = newEventId()
     ) : SensorEvent
 
     data class ParkingSpotReleasedEvent(
-        val licensePlate: String,
-        val spotId: String,
+        val licensePlate: LicensePlate,
+        val spotId: ParkingSpotId,
         override val eventId: String = newEventId()
     ) : SensorEvent
 
     data class VehicleLeavingEvent(
-        val licensePlate: String,
-        val spotId: String,
+        val licensePlate: LicensePlate,
+        val spotId: ParkingSpotId,
         override val eventId: String = newEventId()
     ) : SensorEvent
 
     data class OverStayingEvent(
-        val licensePlate: String,
-        val spotId: String,
+        val licensePlate: LicensePlate,
+        val spotId: ParkingSpotId,
         val duration: Duration,
         override val eventId: String = newEventId()
     ) : SensorEvent

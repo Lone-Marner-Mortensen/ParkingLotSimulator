@@ -18,7 +18,7 @@ class ParkingLifeCycleService(
 
     // We can assume that the vehicle entering events are sequential, See README.
     suspend fun reserveIfCapacityAvailable(licensePlate: String): Boolean = reservationMutex.withLock {
-        val availableCapacity = parkingSpotRepository.getFreeParkingSpots().size.toLong() -
+        val availableCapacity = parkingSpotRepository.getFreeParkingSpots().size -
             vehicleTransitRepository.getNumberOfVehiclesInTransit()
 
         if (availableCapacity <= 0) {
@@ -37,7 +37,7 @@ class ParkingLifeCycleService(
 
     @Transactional
     fun releaseParkingSpot(licensePlate: String, spotId: String) {
-        parkingSpotRepository.releaseParkingSpot(licensePlate, spotId)
+        parkingSpotRepository.releaseParkingSpot(spotId)
         vehicleTransitRepository.removeVehicleInTransit(licensePlate)
     }
 }

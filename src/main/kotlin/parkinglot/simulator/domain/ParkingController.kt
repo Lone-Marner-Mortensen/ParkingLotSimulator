@@ -32,20 +32,20 @@ class ParkingController(
         when (event) {
             is SensorEvent.VehicleEnteringEvent -> handleVehicleEntering()
             is SensorEvent.VehicleLeavingEvent ->
-                vehicleTransitRepository.addVehicleInTransit(event.licensePlate)
+                vehicleTransitRepository.addVehicleInTransit(event.licensePlate.value)
             is SensorEvent.ParkingSpotOccupiedEvent ->
-                parkingLifecycleService.occupyParkingSpot(event.licensePlate, event.spotId)
+                parkingLifecycleService.occupyParkingSpot(event.licensePlate.value, event.spotId.value)
             is SensorEvent.ParkingSpotReleasedEvent ->
-                parkingLifecycleService.releaseParkingSpot(event.licensePlate, event.spotId)
+                parkingLifecycleService.releaseParkingSpot(event.licensePlate.value, event.spotId.value)
             is SensorEvent.OverStayingEvent -> parkingGuardNotifier.vehicleHasOverStayed(
-                event.licensePlate,
-                event.spotId,
+                event.licensePlate.value,
+                event.spotId.value,
                 event.duration
             )
         }
     }
 
-    // We can assume that the vehicle entering events are sequential, See README.
+    // We can assume that the vehicle entering events are sequential, See README (Only one entering lane).
     private suspend fun handleVehicleEntering() = vehicleEnteringMutex.withLock {
         parZip(
             { licensePlateReader.read() },
@@ -61,9 +61,9 @@ class ParkingController(
             { reason -> parkingGuardNotifier.denyEntry(reason) },
             { plate ->
                 if (!parkingLifecycleService.reserveIfCapacityAvailable(plate)) {
-                    // This happens only in very rare occasions because people can't go to the payment machine if
-                    // there are no available parking spots. However sometimes the sensor system make mistakes.
-                    // If it happens the client will get his money back unless he/she decides to wait for a spot to be released.
+                    // This happens only in very rare occasions (if there is a technical error)
+                    // Because of the large number of parking spots, the client probably won't wait long for a spot to become
+                    // available. In worst case a refund needs to be processed.
                     parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS)
                 }
             }

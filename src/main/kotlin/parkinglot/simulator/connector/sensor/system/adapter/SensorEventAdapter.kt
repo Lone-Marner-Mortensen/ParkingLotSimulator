@@ -16,14 +16,16 @@ import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
 import parkinglot.simulator.domain.connector.SensorEventHandler
 import parkinglot.simulator.domain.connector.SensorEventSource
+import parkinglot.simulator.domain.validator.EventValidator
 import kotlin.time.Duration.Companion.milliseconds
 
 
-// Making sure events are processed exactly once and retries 3 times in case of failure
+// Making sure events are processed exactly once, are valid and retries 3 times in case of failure
 @Component
 class SensorEventAdapter(
     private val eventSource: SensorEventSource,
     private val eventHandler: SensorEventHandler,
+    private val eventValidator: EventValidator,
     private val treatmentStatusRepository: TreatmentStatusSensorEventRepository,
     private val meterRegistry: MeterRegistry
 ) : SmartLifecycle {
@@ -35,6 +37,12 @@ class SensorEventAdapter(
 
         consumerJob = scope.launch {
             eventSource.observeEvents().collect { event ->
+                if (!eventValidator.isValid(event)) {
+                    meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
+                    logger.error("Ignoring invalid sensor event {}", event)
+                    return@collect
+                }
+
                 if (treatmentStatusRepository.underTreatment(event)) {
                     meterRegistry.counter("parking.sensor.events", "outcome", "duplicate").increment()
                     logger.info("Ignoring duplicate sensor event {}", event.eventId)

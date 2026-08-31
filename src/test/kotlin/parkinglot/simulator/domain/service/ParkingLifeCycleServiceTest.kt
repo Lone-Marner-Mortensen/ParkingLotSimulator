@@ -26,7 +26,7 @@ class ParkingLifeCycleServiceTest {
         @Test
         fun `reserves a spot when capacity is available`() = runTest {
             every { parkingSpotRepository.getFreeParkingSpots() } returns listOf(spotId)
-            every { vehicleTransitRepository.getNumberOfVehiclesInTransit() } returns 0L
+            every { vehicleTransitRepository.getNumberOfVehiclesInTransit() } returns 0
 
             val reserved = service.reserveIfCapacityAvailable(licensePlate)
 
@@ -37,7 +37,7 @@ class ParkingLifeCycleServiceTest {
         @Test
         fun `does not reserve a spot when no capacity is available`() = runTest {
             every { parkingSpotRepository.getFreeParkingSpots() } returns listOf(spotId)
-            every { vehicleTransitRepository.getNumberOfVehiclesInTransit() } returns 1L
+            every { vehicleTransitRepository.getNumberOfVehiclesInTransit() } returns 1
 
             val reserved = service.reserveIfCapacityAvailable(licensePlate)
 
@@ -58,7 +58,7 @@ class ParkingLifeCycleServiceTest {
     fun `releaseParkingSpot releases the spot and removes the vehicle from transit`() {
         service.releaseParkingSpot(licensePlate, spotId)
 
-        verify { parkingSpotRepository.releaseParkingSpot(licensePlate, spotId) }
+        verify { parkingSpotRepository.releaseParkingSpot(spotId) }
         verify { vehicleTransitRepository.removeVehicleInTransit(licensePlate) }
     }
 }

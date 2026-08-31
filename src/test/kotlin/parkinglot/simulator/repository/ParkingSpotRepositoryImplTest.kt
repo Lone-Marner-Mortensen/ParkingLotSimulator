@@ -16,7 +16,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @SpringBootTest
-class ParkingSpotRepositoryImplVerifyTest {
+class ParkingSpotRepositoryImplTest {
 
     companion object {
         private val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
@@ -63,7 +63,7 @@ class ParkingSpotRepositoryImplVerifyTest {
         val licensePlate = "CD67890"
         repository.occupyParkingSpot(licensePlate, spotId)
 
-        repository.releaseParkingSpot(licensePlate, spotId)
+        repository.releaseParkingSpot(spotId)
 
         val after = assertNotNull(jpaRepository.findByIdOrNull(spotId))
         assertNull(after.licensePlate)
@@ -78,7 +78,7 @@ class ParkingSpotRepositoryImplVerifyTest {
         assertEquals(49, repository.getFreeParkingSpots().size)
         assertTrue(repository.getFreeParkingSpots().none { it == spotId })
 
-        repository.releaseParkingSpot(licensePlate, spotId)
+        repository.releaseParkingSpot(spotId)
         assertEquals(50, repository.getFreeParkingSpots().size)
         assertTrue(repository.getFreeParkingSpots().any { it == spotId })
     }
