@@ -3,6 +3,7 @@ package parkinglot.simulator.connector.sensor.system.adapter
 import jakarta.annotation.PreDestroy
 
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -16,6 +17,8 @@ import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
 import parkinglot.simulator.domain.connector.SensorEventHandler
 import parkinglot.simulator.domain.connector.SensorEventSource
+import parkinglot.simulator.domain.exception.DuplicateEventException
+import parkinglot.simulator.domain.exception.InvalidEventException
 import parkinglot.simulator.domain.validator.EventValidator
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -29,43 +32,45 @@ class SensorEventAdapter(
     private val treatmentStatusRepository: TreatmentStatusSensorEventRepository,
     private val meterRegistry: MeterRegistry
 ) : SmartLifecycle {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
+        logger.error("Sensor event consumer stopped after an unhandled exception", exception)
+    }
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
     private var consumerJob: Job? = null
 
     override fun start() {
         if (isRunning) return
 
         consumerJob = scope.launch {
-            eventSource.observeEvents().collect { event ->
-                if (!eventValidator.isValid(event)) {
-                    meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
-                    logger.error("Ignoring invalid sensor event {}", event)
-                    return@collect
-                }
+                eventSource.observeEvents().collect { event ->
+                    if (!eventValidator.isValid(event)) {
+                        meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
+                        throw InvalidEventException(event, "Invalid sensor event $event. Event ordering is violated.")
+                    }
 
-                if (treatmentStatusRepository.underTreatment(event)) {
-                    meterRegistry.counter("parking.sensor.events", "outcome", "duplicate").increment()
-                    logger.info("Ignoring duplicate sensor event {}", event.eventId)
-                    return@collect
-                }
-                treatmentStatusRepository.markAsUnderTreatment(event)
+                    if (treatmentStatusRepository.underTreatment(event)) {
+                        meterRegistry.counter("parking.sensor.events", "outcome", "duplicate").increment()
+                        throw DuplicateEventException(event, "Duplicate sensor event $event")
+                    }
+                    treatmentStatusRepository.markAsUnderTreatment(event)
 
-                try {
-                    processWithRetry(event)
-                    meterRegistry.counter("parking.sensor.events", "outcome", "processed").increment()
-                } catch (exception: CancellationException) {
-                    treatmentStatusRepository.unmarkAsUnderTreatment(event)
-                    throw exception
-                } catch (exception: Exception) {
-                    treatmentStatusRepository.unmarkAsUnderTreatment(event)
-                    meterRegistry.counter("parking.sensor.events", "outcome", "failed").increment()
-                    logger.error(
-                        "Sensor event {} failed after {} attempts and was released for redelivery",
-                        event.eventId,
-                        EVENT_PROCESSING_ATTEMPTS,
-                        exception
-                    )
-                }
+                    try {
+                        processWithRetry(event)
+                        meterRegistry.counter("parking.sensor.events", "outcome", "processed").increment()
+                    } catch (exception: CancellationException) {
+                        treatmentStatusRepository.unmarkAsUnderTreatment(event)
+                        throw exception
+                    } catch (exception: Exception) {
+                        treatmentStatusRepository.unmarkAsUnderTreatment(event)
+                        meterRegistry.counter("parking.sensor.events", "outcome", "failed").increment()
+                        logger.error(
+                            "Sensor event {} failed after {} attempts and was released for redelivery",
+                            event.eventId,
+                            EVENT_PROCESSING_ATTEMPTS,
+                            exception
+                        )
+                        throw exception
+                    }
             }
         }
     }
