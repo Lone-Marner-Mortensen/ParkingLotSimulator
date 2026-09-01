@@ -49,25 +49,35 @@ vehicle leaving -> parking spot occupied and parking spot released -> vehicle le
 ## Getting started
 
 ### Run the app
+Run the application with:
 ```bash
 ./gradlew start
 ```
+This starts the PostgreSQL container via Docker Compose and then launches the application. 
+You can also run the application directly from IntelliJ. </br> 
 
-Starts the PostgreSQL container via Docker Compose and then launches the application
-and runs the DemoParkingLotSimulator. You can also run the App via Intellij. After running it you are expected to see: 
+If the input is not valid, the application throws a descriptive exception and stops.
+
+#### Running on a predefined event list
+
+By default, the application runs the DemoParkingLotSimulator, which uses a predefined list of events.
+After running the application, you are expected to see:
+
 ```
 Taken spots: [A22, A23, A24, A25, B1, B2, B3]
 Vehicle in transition: 6
 ```
-as one of the last statements in the log. DemoParkingLotSimulator runs a predefined event list. 
-If you want to run the application with another event list, you must change the DemoParkingLotSimulator manually.
-If input is not valid, the application will throw a descriptive exception and stop.
+as one of the last statements in the log. 
 
-#### User interface
-A user interface for running ParkingLotSimulatorApplication on a non predefined event list or with randomized events is not implemented at this point.
-Since the validity of an event depends on previous events, you might have to look at the entire list to assess the validity of a single event.
-Therefore, early validation (i.e., validating all events before the first event is fully processed) would slow down the application and is not implemented either.
+#### Running on a non-predefined event list
+To run the application with a different event list, you currently need to modify DemoParkingLotSimulator manually. </br> 
 
+A user interface for running ParkingLotSimulatorApplication with a non-predefined event list or 
+randomized events has not been implemented yet. </br> 
+
+Since the validity of an event can depend on previous events, assessing the validity of a single event may 
+require examining the entire event list. Therefore, early validation—validating all events before the first event is 
+fully processed—would slow down the application and has not been implemented.
 ### Stop the app
 ```bash
 ./gradlew stop
