@@ -1,11 +1,10 @@
 # Parking Lot Simulator
 
 A parking lot simulation project built with Spring Boot. </br>
-It gives the number of cars who can enter the parking lot and which spots are available. </br> </br>
+It gives the number of vehicles who can enter the parking lot and which spots are available. </br> </br>
 **A lot of classes/implementations are abstracted away.** </br>
 **We pretend that there are a sensor system, payment system and a parking guard notification system
 that we can connect to.** </br>
-It's not a project that is meant to go live.</br>
 
 The project follows a relaxed hexagonal architecture.</br>
 Everything depends on the domain, which exposes interfaces (also called ports) to the other components. 
@@ -44,7 +43,7 @@ vehicle leaving -> parking spot occupied and parking spot released -> vehicle le
 ## Prerequisites
 
 - JDK 17+
-- Docker Desktop or Docker Engine (must be up when running the app)
+- Docker Desktop or Docker Engine (must be up to start the app)
 - Gradle wrapper (bundled with the repo)
 
 ## Getting started
@@ -54,28 +53,23 @@ vehicle leaving -> parking spot occupied and parking spot released -> vehicle le
 ./gradlew start
 ```
 
-This task starts the PostgreSQL container via Docker Compose and then launches the Spring Boot application
-and runs the DemoSensorEventRunner. After running it you are expected to see: 
+Starts the PostgreSQL container via Docker Compose and then launches the application
+and runs the DemoParkingLotSimulator. You can also run the App via Intellij. After running it you are expected to see: 
 ```
-Taken spots: [A22, A23, A24, A25]
+Taken spots: [A22, A23, A24, A25, B1, B2, B3]
 Vehicle in transition: 6
 ```
-in the log. DemoSensorEventRunner runs a predefined event list. 
-If you want to run the application with another event list, you must change the DemoSensorEventRunner manually.
-A user interface for the DemoSensorEventRunner is on the way.
+as one of the last statements in the log. DemoParkingLotSimulator runs a predefined event list. 
+If you want to run the application with another event list, you must change the DemoParkingLotSimulator manually.
+If input is not valid, the application will throw a descriptive exception and stop.
 
+#### User interface
+A user interface for running ParkingLotSimulatorApplication on a non predefined event list or with randomized events is not implemented at this point.
+Since the validity of an event depends on previous events, you might have to look at the entire list to assess the validity of a single event.
+Therefore, early validation (i.e., validating all events before the first event is fully processed) would slow down the application and is not implemented either.
 
 ### Stop the app
-
 ```bash
 ./gradlew stop
 ```
-
-## Useful commands
-
-```bash
-./gradlew test
-./gradlew bootRun
-./gradlew start
-./gradlew stop
-```
+Stops docker and removes the PostgreSQL container and stops the application.

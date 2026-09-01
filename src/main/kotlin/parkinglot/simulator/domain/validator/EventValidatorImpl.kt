@@ -13,7 +13,7 @@ class EventValidatorImpl(
 
     override fun isValid(event: SensorEvent): Boolean = when (event) {
         is SensorEvent.VehicleEnteringEvent -> true
-        // Check if the vehicle is in transit before occupying/releasing a parking spot
+        // Check if the vehicle is in transit before occupying a parking spot
         is SensorEvent.ParkingSpotOccupiedEvent -> vehicleTransitRepository.existsByLicensePlate(event.licensePlate.value)
         // Check if the parking spot has been taken before processing vehicle leaving or overstaying events
         is SensorEvent.ParkingSpotReleasedEvent -> parkingSpotRepository.existsBySpotId(event.spotId.value)

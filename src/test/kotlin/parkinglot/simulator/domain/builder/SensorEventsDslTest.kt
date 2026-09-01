@@ -21,65 +21,40 @@ class SensorEventsDslTest {
 
     @Test
     fun `sensorEvents correctly builds a list of events`() {
+        // When
         val plate = LicensePlate("AB123CD123")
-        val singleSpot = spots("A", 1..1).single()
+        val singleSpot = ParkingSpotId("A1")
         val allSpots = spots("A", 1..3)
         val plates = listOf(LicensePlate("AB123CD123"), LicensePlate("XY987ZZ999"), LicensePlate("QW456ER456"))
         val duration = 5.minutes
 
-        val result = sensorEvents {
+        // Then
+        val results = sensorEvents {
             vehicleEntering()
             occupied(plate, singleSpot)
-            released(spotIds = allSpots)
+            released(plates, allSpots)
             leaving(plates, allSpots)
-            overstaying(plate, spotIds = allSpots, duration = duration)
+            overstaying(plates, allSpots, duration)
         }
 
-        val releasedPlates = result.subList(2, 2 + allSpots.size).map { (it as SensorEvent.ParkingSpotReleasedEvent).licensePlate }
-
+        // Expect
         val expected = listOf(
-            SensorEvent.VehicleEnteringEvent(eventId = result[0].eventId),
-            SensorEvent.ParkingSpotOccupiedEvent(plate, singleSpot, eventId = result[1].eventId)
+            SensorEvent.VehicleEnteringEvent(eventId = results[0].eventId),
+            SensorEvent.ParkingSpotOccupiedEvent(plate, singleSpot, eventId = results[1].eventId)
         ) +
-            allSpots.zip(releasedPlates).mapIndexed { index, (spot, releasedPlate) ->
-                SensorEvent.ParkingSpotReleasedEvent(releasedPlate, spot, eventId = result[2 + index].eventId)
+            allSpots.zip(plates).mapIndexed { index, (spot, releasedPlate) ->
+                SensorEvent.ParkingSpotReleasedEvent(releasedPlate, spot, eventId = results[2 + index].eventId)
             } +
             allSpots.zip(plates).mapIndexed { index, (spot, leavingPlate) ->
-                SensorEvent.VehicleLeavingEvent(leavingPlate, spot, eventId = result[5 + index].eventId)
+                SensorEvent.VehicleLeavingEvent(leavingPlate, spot, eventId = results[5 + index].eventId)
             } +
-            allSpots.mapIndexed { index, spot ->
-                SensorEvent.OverStayingEvent(plate, spot, duration, eventId = result[8 + index].eventId)
+            allSpots.zip(plates).mapIndexed { index, (spot, overstayingPlate) ->
+                SensorEvent.OverStayingEvent(overstayingPlate, spot, duration, eventId = results[8 + index].eventId)
             }
 
-        assertEquals(11, result.size)
-        assertEquals(expected, result)
+        assertEquals(11, results.size)
+        assertEquals(expected, results)
     }
-
-    @TestFactory
-    fun `generates a distinct random license plate per spot when no license plates are given`() =
-        listOf<Pair<String, (List<ParkingSpotId>) -> List<LicensePlate>>>(
-            "occupied" to { allSpots ->
-                sensorEvents { occupied(spotIds = allSpots) }.map { (it as SensorEvent.ParkingSpotOccupiedEvent).licensePlate }
-            },
-            "released" to { allSpots ->
-                sensorEvents { released(spotIds = allSpots) }.map { (it as SensorEvent.ParkingSpotReleasedEvent).licensePlate }
-            },
-            "leaving" to { allSpots ->
-                sensorEvents { leaving(spotIds = allSpots) }.map { (it as SensorEvent.VehicleLeavingEvent).licensePlate }
-            },
-            "overstaying" to { allSpots ->
-                sensorEvents { overstaying(spotIds = allSpots, duration = 5.minutes) }
-                    .map { (it as SensorEvent.OverStayingEvent).licensePlate }
-            }
-        ).map { (name, generatePlates) ->
-            dynamicTest("$name generates a distinct random license plate per spot when no license plates are given") {
-                val allSpots = spots("A", 1..5)
-
-                val licensePlates = generatePlates(allSpots)
-
-                assertEquals(allSpots.size, licensePlates.distinct().size)
-            }
-        }
 
     @TestFactory
     fun `rejects a license plates list containing duplicates`() =
@@ -92,8 +67,6 @@ class SensorEventsDslTest {
             dynamicTest("$name rejects a license plates list containing duplicates") {
                 val allSpots = spots("A", 1..2)
                 val plate = LicensePlate("AB123CD123")
-
-                println("build = $build")
 
                 assertFailsWith<IllegalArgumentException> {
                     build(listOf(plate, plate), allSpots)

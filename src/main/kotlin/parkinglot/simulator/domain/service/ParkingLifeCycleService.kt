@@ -16,13 +16,13 @@ class ParkingLifeCycleService(
 ) {
     private val reservationMutex = Mutex()
 
-    // We can assume that the vehicle entering events are sequential, See README.
+    // We can assume that the vehicle entering events are Synchronously, See README.
     suspend fun reserveIfCapacityAvailable(licensePlate: String): Boolean = reservationMutex.withLock {
         val availableCapacity = parkingSpotRepository.getFreeParkingSpots().size -
             vehicleTransitRepository.getNumberOfVehiclesInTransit()
 
         if (availableCapacity <= 0) {
-            return@withLock false
+            return false
         }
 
         vehicleTransitRepository.addVehicleInTransit(licensePlate)

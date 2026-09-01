@@ -45,7 +45,7 @@ class ParkingController(
         }
     }
 
-    // We can assume that the vehicle entering events are sequential, See README (Only one entering lane).
+    // We can assume that the vehicle entering events are Synchronously, See README (Only one entering lane).
     private suspend fun handleVehicleEntering() = vehicleEnteringMutex.withLock {
         parZip(
             { licensePlateReader.read() },
@@ -62,8 +62,8 @@ class ParkingController(
             { plate ->
                 if (!parkingLifecycleService.reserveIfCapacityAvailable(plate)) {
                     // This happens only in very rare occasions (if there is a technical error)
-                    // Because of the large number of parking spots, the client probably won't wait long for a spot to become
-                    // available. In worst case a refund needs to be processed.
+                    // Because of the large number of parking spots, the client probably won't wait
+                    // long for a spot to become available. In worst case a refund needs to be processed.
                     parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS)
                 }
             }

@@ -13,24 +13,30 @@ class ParkingSpotRepositoryImpl(
 ) : ParkingSpotRepository {
 
     override fun occupyParkingSpot(licensePlate: String, spotId: String) {
-        jpaRepository.findById(spotId).orElse(null)
-            ?.let(mapper::toDomain)
-            ?.let { it.copy(licensePlate = licensePlate) }
-            ?.let(mapper::toEntity)
-            ?.let(jpaRepository::save)
+        jpaRepository.findById(spotId)
+            .map(mapper::toDomain)
+            .map { it.copy(licensePlate = licensePlate) }
+            .map(mapper::toEntity)
+            .map(jpaRepository::save)
+            .orElse(null)
     }
 
     override fun releaseParkingSpot(spotId: String) {
-        jpaRepository.findById(spotId).orElse(null)
-            ?.let(mapper::toDomain)
-            ?.let { it.copy(licensePlate = null) }
-            ?.let(mapper::toEntity)
-            ?.let(jpaRepository::save)
+        jpaRepository.findById(spotId)
+            .map(mapper::toDomain)
+            .map { it.copy(licensePlate = null) }
+            .map(mapper::toEntity)
+            .map(jpaRepository::save)
+            .orElse(null)
     }
 
     @Transactional
     override fun releaseAllParkingSpots() {
-        jpaRepository.releaseAll()
+        jpaRepository.findAll()
+            .map(mapper::toDomain)
+            .map { it.copy(licensePlate = null) }
+            .map(mapper::toEntity)
+            .let(jpaRepository::saveAll)
     }
 
     override fun getFreeParkingSpots(): List<String> =

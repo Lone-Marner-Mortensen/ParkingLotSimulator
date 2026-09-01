@@ -10,7 +10,6 @@ import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.repository.ParkingSpotRepository
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
-import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
@@ -28,16 +27,21 @@ class EventValidatorImplTest {
         assertTrue(validator.isValid(SensorEvent.VehicleEnteringEvent()))
     }
 
-    @TestFactory
-    fun `validate ParkingSpotOccupiedEvent by license plate in transit`() =
-        listOf(true, false).map { existsByLicensePlate ->
-            val event = SensorEvent.ParkingSpotOccupiedEvent(licensePlate, spotId)
-            dynamicTest("${event::class.simpleName} is ${if (existsByLicensePlate) "valid" else "invalid"} when the license plate is ${if (existsByLicensePlate) "" else "not "}found in VehicleTransitRepository") {
-                every { vehicleTransitRepository.existsByLicensePlate(licensePlate.value) } returns existsByLicensePlate
+    @Test
+    fun `ParkingSpotOccupiedEvent is valid when the license plate is found in VehicleTransitRepository`() {
+        val event = SensorEvent.ParkingSpotOccupiedEvent(licensePlate, spotId)
+        every { vehicleTransitRepository.existsByLicensePlate(licensePlate.value) } returns true
 
-                assertEquals(existsByLicensePlate, validator.isValid(event))
-            }
-        }
+        assertTrue(validator.isValid(event))
+    }
+
+    @Test
+    fun `ParkingSpotOccupiedEvent is invalid when the license plate is not found in VehicleTransitRepository`() {
+        val event = SensorEvent.ParkingSpotOccupiedEvent(licensePlate, spotId)
+        every { vehicleTransitRepository.existsByLicensePlate(licensePlate.value) } returns false
+
+        assertFalse(validator.isValid(event))
+    }
 
     @TestFactory
     fun `validate ParkingSpotReleasedEvent, vehicle-leaving and overstaying events by spot id`() =

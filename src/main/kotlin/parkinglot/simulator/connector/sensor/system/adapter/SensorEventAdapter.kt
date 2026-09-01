@@ -33,7 +33,7 @@ class SensorEventAdapter(
     private val meterRegistry: MeterRegistry
 ) : SmartLifecycle {
     private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
-        logger.error("Sensor event consumer stopped after an unhandled exception", exception)
+        logger.error("SensorEventAdapter stopped after an unhandled exception", exception)
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
     private var consumerJob: Job? = null

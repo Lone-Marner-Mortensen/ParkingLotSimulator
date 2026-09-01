@@ -7,8 +7,10 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.test.runTest
+import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.TestFactory
 import parkinglot.simulator.domain.service.ParkingLifeCycleService
 import parkinglot.simulator.domain.connector.LicensePlateReader
 import parkinglot.simulator.domain.connector.ParkingGuardNotifier
@@ -20,6 +22,12 @@ import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
 import kotlin.time.Duration.Companion.minutes
+
+private data class DenialCase(
+    val description: String,
+    val expectedReason: DenyEntryReason,
+    val stub: () -> Unit
+)
 
 class ParkingControllerTest {
     private val licensePlateReader = mockk<LicensePlateReader>()
@@ -61,53 +69,48 @@ class ParkingControllerTest {
 
     @Nested
     inner class ParkingLotEntryDenial {
-        @Test
-        fun `is reported if vehicle is too big`() = runTest {
-            coEvery { licensePlateReader.read() } returns licensePlate.right()
-            coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
-            coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+        @TestFactory
+        fun `entry denied`() =
+            listOf(
+                DenialCase("vehicle is too big", DenyEntryReason.VEHICLE_TOO_BIG) {
+                    coEvery { licensePlateReader.read() } returns licensePlate.right()
+                    coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
+                    coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+                },
+                DenialCase("payment fails", DenyEntryReason.PAYMENT_NOT_ACCEPTED) {
+                    coEvery { licensePlateReader.read() } returns licensePlate.right()
+                    coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
+                    coEvery { paymentStatusChecker.isPaymentComplete() } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
+                },
+                DenialCase("license plate reading fails", DenyEntryReason.LICENSE_PLATE_NOT_READABLE) {
+                    coEvery { licensePlateReader.read() } returns DenyEntryReason.LICENSE_PLATE_NOT_READABLE.left()
+                    coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
+                    coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+                }
+            ).map { case ->
+                dynamicTest("is reported if ${case.description}") {
+                    runTest {
+                        case.stub()
 
-            handler.handle(SensorEvent.VehicleEnteringEvent())
+                        handler.handle(SensorEvent.VehicleEnteringEvent())
 
-            verify { parkingGuardNotifier.denyEntry(DenyEntryReason.VEHICLE_TOO_BIG) }
-            coVerify(exactly = 0) { parkingLifecycleService.reserveIfCapacityAvailable(any()) }
-        }
+                        verify { parkingGuardNotifier.denyEntry(case.expectedReason) }
+                        coVerify(exactly = 0) { parkingLifecycleService.reserveIfCapacityAvailable(any()) }
+                    }
+                }
+            }
+    }
 
-        @Test
-        fun `is reported if payment fails`() = runTest {
-            coEvery { licensePlateReader.read() } returns licensePlate.right()
-            coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-            coEvery { paymentStatusChecker.isPaymentComplete() } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
+    @Test
+    fun `entry is denied after successful checks if capacity is unavailable`() = runTest {
+        coEvery { licensePlateReader.read() } returns licensePlate.right()
+        coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
+        coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+        coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns false
 
-            handler.handle(SensorEvent.VehicleEnteringEvent())
+        handler.handle(SensorEvent.VehicleEnteringEvent())
 
-            verify { parkingGuardNotifier.denyEntry(DenyEntryReason.PAYMENT_NOT_ACCEPTED) }
-            coVerify(exactly = 0) { parkingLifecycleService.reserveIfCapacityAvailable(any()) }
-        }
-
-        @Test
-        fun `is reported if license plate reading fails`() = runTest {
-            coEvery { licensePlateReader.read() } returns DenyEntryReason.LICENSE_PLATE_NOT_READABLE.left()
-            coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-            coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
-
-            handler.handle(SensorEvent.VehicleEnteringEvent())
-
-            verify { parkingGuardNotifier.denyEntry(DenyEntryReason.LICENSE_PLATE_NOT_READABLE) }
-            coVerify(exactly = 0) { parkingLifecycleService.reserveIfCapacityAvailable(any()) }
-        }
-
-        @Test
-        fun `is reported after successful checks if capacity is unavailable`() = runTest {
-            coEvery { licensePlateReader.read() } returns licensePlate.right()
-            coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-            coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
-            coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns false
-
-            handler.handle(SensorEvent.VehicleEnteringEvent())
-
-            verify { parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS) }
-        }
+        verify { parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS) }
     }
 
     @Test
