@@ -6,6 +6,11 @@ import org.junit.jupiter.api.TestFactory
 import parkinglot.simulator.domain.model.LicensePlate
 import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.model.SensorEvent
+import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
+import parkinglot.simulator.domain.model.SensorEvent.VehicleLeavingEvent
+import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.time.Duration.Companion.minutes
@@ -39,17 +44,17 @@ class SensorEventsDslTest {
 
         // Expect
         val expected = listOf(
-            SensorEvent.VehicleEnteringEvent(eventId = results[0].eventId),
-            SensorEvent.ParkingSpotOccupiedEvent(plate, singleSpot, eventId = results[1].eventId)
+            VehicleEnteringEvent(eventId = results[0].eventId),
+            ParkingSpotOccupiedEvent(plate, singleSpot, eventId = results[1].eventId)
         ) +
             allSpots.zip(plates).mapIndexed { index, (spot, releasedPlate) ->
-                SensorEvent.ParkingSpotReleasedEvent(releasedPlate, spot, eventId = results[2 + index].eventId)
+                ParkingSpotReleasedEvent(releasedPlate, spot, eventId = results[2 + index].eventId)
             } +
             allSpots.zip(plates).mapIndexed { index, (spot, leavingPlate) ->
-                SensorEvent.VehicleLeavingEvent(leavingPlate, spot, eventId = results[5 + index].eventId)
+                VehicleLeavingEvent(leavingPlate, spot, eventId = results[5 + index].eventId)
             } +
             allSpots.zip(plates).mapIndexed { index, (spot, overstayingPlate) ->
-                SensorEvent.OverStayingEvent(overstayingPlate, spot, duration, eventId = results[8 + index].eventId)
+                OverStayingEvent(overstayingPlate, spot, duration, eventId = results[8 + index].eventId)
             }
 
         assertEquals(11, results.size)
