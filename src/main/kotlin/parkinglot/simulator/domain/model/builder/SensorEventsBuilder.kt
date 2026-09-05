@@ -1,4 +1,4 @@
-package parkinglot.simulator.domain.builder
+package parkinglot.simulator.domain.model.builder
 
 import kotlin.time.Duration
 import parkinglot.simulator.domain.model.LicensePlate

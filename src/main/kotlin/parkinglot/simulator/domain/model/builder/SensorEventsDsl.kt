@@ -1,4 +1,4 @@
-package parkinglot.simulator.domain.builder
+package parkinglot.simulator.domain.model.builder
 
 import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.model.SensorEvent

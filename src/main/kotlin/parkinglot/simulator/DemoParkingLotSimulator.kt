@@ -9,8 +9,8 @@ import org.springframework.boot.CommandLineRunner
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import parkinglot.simulator.connector.sensor.system.EventPublisher
-import parkinglot.simulator.domain.builder.sensorEvents
-import parkinglot.simulator.domain.builder.spots
+import parkinglot.simulator.domain.model.builder.sensorEvents
+import parkinglot.simulator.domain.model.builder.spots
 import parkinglot.simulator.domain.model.LicensePlate
 import org.awaitility.Awaitility.await
 import parkinglot.simulator.domain.repository.ParkingSpotRepository

@@ -1,4 +1,4 @@
-package parkinglot.simulator.domain.builder
+package parkinglot.simulator.domain.model.builder
 
 import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.Test
