@@ -13,7 +13,7 @@ import parkinglot.simulator.domain.model.DenyEntryReason
 @Component
 class PaymentStatusCheckerImpl: PaymentStatusChecker {
 
-    override suspend fun isPaymentComplete(): Either<DenyEntryReason, Boolean> {
+    override suspend fun wasPaymentSuccessful(): Either<DenyEntryReason, Boolean> {
         delay(500)
 
         if (Random.nextDouble() < 0.005) {

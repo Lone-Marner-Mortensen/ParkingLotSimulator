@@ -49,7 +49,7 @@ class ParkingController(
         parZip(
             { licensePlateReader.read() },
             { vehicleSizeEstimator.isVehicleTooBig() },
-            { paymentStatusChecker.isPaymentComplete() }
+            { paymentStatusChecker.wasPaymentSuccessful() }
         ) { plate, size, payment ->
             either {
                 size.bind()

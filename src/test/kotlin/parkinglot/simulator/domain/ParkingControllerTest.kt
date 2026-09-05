@@ -78,17 +78,17 @@ class ParkingControllerTest {
                 DenialCase("vehicle is too big", DenyEntryReason.VEHICLE_TOO_BIG) {
                     coEvery { licensePlateReader.read() } returns licensePlate.right()
                     coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
-                    coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+                    coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
                 },
                 DenialCase("payment fails", DenyEntryReason.PAYMENT_NOT_ACCEPTED) {
                     coEvery { licensePlateReader.read() } returns licensePlate.right()
                     coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-                    coEvery { paymentStatusChecker.isPaymentComplete() } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
+                    coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
                 },
                 DenialCase("license plate reading fails", DenyEntryReason.LICENSE_PLATE_NOT_READABLE) {
                     coEvery { licensePlateReader.read() } returns DenyEntryReason.LICENSE_PLATE_NOT_READABLE.left()
                     coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-                    coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+                    coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
                 }
             ).map { case ->
                 dynamicTest("is reported if ${case.description}") {
@@ -108,7 +108,7 @@ class ParkingControllerTest {
     fun `entry is denied after successful checks if capacity is unavailable`() = runTest {
         coEvery { licensePlateReader.read() } returns licensePlate.right()
         coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-        coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+        coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
         coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns false
 
         handler.handle(VehicleEnteringEvent())
@@ -120,7 +120,7 @@ class ParkingControllerTest {
     fun `parking lot entry granted if vehicle is not too big and payment is complete and license plate is read successfully`() = runTest {
         coEvery { licensePlateReader.read() } returns licensePlate.right()
         coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-        coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
+        coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
         coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns true
 
         handler.handle(VehicleEnteringEvent())
