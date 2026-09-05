@@ -12,6 +12,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import io.micrometer.core.instrument.MeterRegistry
+import kotlinx.coroutines.CompletableDeferred
 import org.slf4j.LoggerFactory
 import org.springframework.context.SmartLifecycle
 import org.springframework.stereotype.Component
@@ -32,8 +33,9 @@ class SensorEventAdapter(
     private val treatmentStatusRepository: TreatmentStatusSensorEventRepository,
     private val meterRegistry: MeterRegistry
 ) : SmartLifecycle {
+    private var failure = CompletableDeferred<Throwable>()
     private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
-        logger.error("SensorEventAdapter stopped after an unhandled exception", exception)
+        failure.complete(exception)
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
     private var consumerJob: Job? = null
@@ -81,6 +83,8 @@ class SensorEventAdapter(
     }
 
     override fun isRunning(): Boolean = consumerJob?.isActive == true
+
+    internal suspend fun awaitFailure(): Nothing = throw failure.await()
 
     private suspend fun processWithRetry(event: parkinglot.simulator.domain.model.SensorEvent) {
         repeat(EVENT_PROCESSING_ATTEMPTS) { attempt ->

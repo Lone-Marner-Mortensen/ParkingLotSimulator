@@ -17,6 +17,8 @@ import org.junit.jupiter.api.assertThrows
 import parkinglot.simulator.connector.sensor.system.EventPublisher
 import parkinglot.simulator.domain.connector.SensorEventHandler
 import parkinglot.simulator.domain.connector.SensorEventSource
+import parkinglot.simulator.domain.exception.DuplicateEventException
+import parkinglot.simulator.domain.exception.InvalidEventException
 import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.validator.EventValidator
 import kotlin.test.assertFalse
@@ -62,7 +64,10 @@ class SensorEventAdapterTest {
             publisher.simulateEventEmissions(listOf(event, event))
 
             coVerify(timeout = 1_000, exactly = 1) { eventHandler.handle(any()) }
-            // The sensorEventAdapter/consumer is stopped because an exception is thrown
+
+            assertThrows<DuplicateEventException> {
+                runBlocking { adapter.awaitFailure() }
+            }
             await().until { !adapter.isRunning }
         } finally {
             adapter.close()
@@ -80,7 +85,10 @@ class SensorEventAdapterTest {
 
             verify(timeout = 1_000, exactly = 1) { eventValidator.isValid(event) }
             coVerify(exactly = 0) { eventHandler.handle(any()) }
-            // The sensorEventAdapter/consumer is stopped because an exception is thrown
+
+            assertThrows<InvalidEventException> {
+                runBlocking { adapter.awaitFailure() }
+            }
             await().until { !adapter.isRunning }
         } finally {
             adapter.close()
@@ -88,7 +96,7 @@ class SensorEventAdapterTest {
     }
 
     @Test
-    fun `failed event is retried three times then unmarked as under-treatment and rethrow exception and stops`() {
+    fun `failed event is retried three and rethrow exception and stops`() {
         val eventValidator = mockk<EventValidator> { every { isValid(any()) } returns true }
         every { treatmentStatusRepository.underTreatment(event) } returns false
         coEvery { eventHandler.handle(event) } throws IllegalStateException("persistence unavailable")
@@ -98,10 +106,11 @@ class SensorEventAdapterTest {
             adapter.start()
             publisher.simulateEventEmissions(listOf(event))
 
-            verify(timeout = 2_000, exactly = 1) { treatmentStatusRepository.unmarkAsUnderTreatment(event) }
-            assertFalse(treatmentStatusRepository.underTreatment(event))
             coVerify(exactly = 3) { eventHandler.handle(event) }
-            // The sensorEventAdapter/consumer is stopped because the exception is rethrown and not handled
+            val exception = assertThrows<IllegalStateException> {
+                runBlocking { adapter.awaitFailure() }
+            }
+            assertEquals("persistence unavailable", exception.message)
             await().until { !adapter.isRunning }
         } finally {
             adapter.close()
