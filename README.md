@@ -6,8 +6,8 @@ It gives the number of vehicles who can enter the parking lot and which spots ar
 **We pretend that there are a sensor system, payment system and a parking guard notification system
 that we can connect to.** </br>
 
-The project follows a relaxed hexagonal architecture.</br>
-Everything depends on the domain, which exposes interfaces (also called ports) to the other components. 
+The project follows hexagonal architecture, but not in a strict sense.</br>
+Everything depends on the domain, which exposes interfaces to the other components. 
 
 ## Overview
 
@@ -65,9 +65,10 @@ After running the application, you are expected to see:
 
 ```
 Taken spots: [A22, A23, A24, A25, B1, B2, B3]
-Vehicle in transition: 6
+Vehicles in transit: 6
 ```
-as one of the last statements in the log. 
+as one of the last statements in the log. Because allowing vehicles to enter the parking lot is based on a random number generator,
+the number of vehicles in transit might be lower in rare cases.
 
 #### Running on a non-predefined event list
 To run the application with a different event list, you currently need to modify DemoParkingLotSimulator manually. </br> 

@@ -65,13 +65,13 @@ class DemoParkingLotSimulator(
 
             val demoSpots = spots("A", 19..25) + spots("B", 1..3)
             val occupiedSpots = demoSpots.filterNot { it.value in parkingSpotRepository.getFreeParkingSpots() }.toSet()
-
-            println("Taken spots: ${occupiedSpots.map { it.value }}")
-            println("Vehicle in transition: ${vehicleTransitRepository.getNumberOfVehiclesInTransit()}")
+            logger.info("")
+            logger.info("Taken spots: ${occupiedSpots.map { it.value }}")
+            logger.info("Vehicles in transit: ${vehicleTransitRepository.getNumberOfVehiclesInTransit()}")
+            logger.info("")
             exitProcess(0)
         } catch (exception: Exception) {
             logger.error("DemoParkingLotSimulator failed: {}", exception.message, exception)
-            exitProcess(1)
         }
     }
 
