@@ -14,7 +14,11 @@ import parkinglot.simulator.domain.connector.SensorEventHandler
 import parkinglot.simulator.domain.connector.VehicleSizeEstimator
 import parkinglot.simulator.domain.model.DenyEntryReason
 import parkinglot.simulator.domain.model.SensorEvent
-import parkinglot.simulator.domain.repository.VehicleTransitRepository
+import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
+import parkinglot.simulator.domain.model.SensorEvent.VehicleLeavingEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
+import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
 @Service
 class ParkingController(
@@ -22,7 +26,6 @@ class ParkingController(
     private val vehicleSizeEstimator: VehicleSizeEstimator,
     private val paymentStatusChecker: PaymentStatusChecker,
     private val parkingGuardNotifier: ParkingGuardNotifier,
-    private val vehicleTransitRepository: VehicleTransitRepository,
     private val parkingLifecycleService: ParkingLifeCycleService
 ) : SensorEventHandler {
     private val vehicleEnteringMutex = Mutex()
@@ -30,18 +33,14 @@ class ParkingController(
     override suspend fun handle(event: SensorEvent) {
         logger.info("Handling sensor event {}", event)
         when (event) {
-            is SensorEvent.VehicleEnteringEvent -> handleVehicleEntering()
-            is SensorEvent.VehicleLeavingEvent ->
-                vehicleTransitRepository.addVehicleInTransit(event.licensePlate.value)
-            is SensorEvent.ParkingSpotOccupiedEvent ->
-                parkingLifecycleService.occupyParkingSpot(event.licensePlate.value, event.spotId.value)
-            is SensorEvent.ParkingSpotReleasedEvent ->
-                parkingLifecycleService.releaseParkingSpot(event.licensePlate.value, event.spotId.value)
-            is SensorEvent.OverStayingEvent -> parkingGuardNotifier.vehicleHasOverStayed(
-                event.licensePlate.value,
-                event.spotId.value,
-                event.duration
-            )
+            is VehicleEnteringEvent -> handleVehicleEntering()
+            is VehicleLeavingEvent ->
+                parkingLifecycleService.markVehicleAsLeaving(event)
+            is ParkingSpotOccupiedEvent ->
+                parkingLifecycleService.occupyParkingSpot(event)
+            is ParkingSpotReleasedEvent ->
+                parkingLifecycleService.releaseParkingSpot(event)
+            is OverStayingEvent -> parkingLifecycleService.overStaying(event)
         }
     }
 

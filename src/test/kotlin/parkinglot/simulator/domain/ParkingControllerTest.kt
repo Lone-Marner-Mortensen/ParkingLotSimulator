@@ -19,9 +19,13 @@ import parkinglot.simulator.domain.connector.VehicleSizeEstimator
 import parkinglot.simulator.domain.model.DenyEntryReason
 import parkinglot.simulator.domain.model.LicensePlate
 import parkinglot.simulator.domain.model.ParkingSpotId
-import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
 import kotlin.time.Duration.Companion.minutes
+import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
+import parkinglot.simulator.domain.model.SensorEvent.VehicleLeavingEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
+import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
 private data class DenialCase(
     val description: String,
@@ -41,7 +45,6 @@ class ParkingControllerTest {
         vehicleSizeEstimator,
         paymentStatusChecker,
         parkingGuardNotifier,
-        vehicleTransitRepository,
         parkingLifecycleService
     )
     private val licensePlate = "AB123CD123"
@@ -50,21 +53,21 @@ class ParkingControllerTest {
     private val spotIdValue = ParkingSpotId(spotId)
 
     @Test
-    fun `spot and transit events delegate to their use cases`() = runTest {
-        handler.handle(SensorEvent.ParkingSpotOccupiedEvent(licensePlateValue, spotIdValue))
-        handler.handle(SensorEvent.ParkingSpotReleasedEvent(licensePlateValue, spotIdValue))
-        handler.handle(SensorEvent.VehicleLeavingEvent(licensePlateValue, spotIdValue))
+    fun `occupySpot, releaseSpot, leaving, and overstay events are delegated to their use cases`() = runTest {
+        val occupiedEvent = ParkingSpotOccupiedEvent(licensePlateValue, spotIdValue)
+        val releasedEvent = ParkingSpotReleasedEvent(licensePlateValue, spotIdValue)
+        val leavingEvent = VehicleLeavingEvent(licensePlateValue, spotIdValue)
+        val overStayingEvent = OverStayingEvent(licensePlateValue, spotIdValue, 15.minutes)
 
-        verify { parkingLifecycleService.occupyParkingSpot(licensePlate, spotId) }
-        verify { parkingLifecycleService.releaseParkingSpot(licensePlate, spotId) }
-        verify { vehicleTransitRepository.addVehicleInTransit(licensePlate) }
-    }
+        handler.handle(occupiedEvent)
+        handler.handle(releasedEvent)
+        handler.handle(leavingEvent)
+        handler.handle(overStayingEvent)
 
-    @Test
-    fun `overstay event notifies guard`() = runTest {
-        handler.handle(SensorEvent.OverStayingEvent(licensePlateValue, spotIdValue, 15.minutes))
-
-        verify { parkingGuardNotifier.vehicleHasOverStayed(licensePlate, spotId, 15.minutes) }
+        verify { parkingLifecycleService.occupyParkingSpot(occupiedEvent) }
+        verify { parkingLifecycleService.releaseParkingSpot(releasedEvent) }
+        verify { parkingLifecycleService.markVehicleAsLeaving(leavingEvent) }
+        verify { parkingLifecycleService.overStaying(overStayingEvent) }
     }
 
     @Nested
@@ -92,7 +95,7 @@ class ParkingControllerTest {
                     runTest {
                         case.stub()
 
-                        handler.handle(SensorEvent.VehicleEnteringEvent())
+                        handler.handle(VehicleEnteringEvent())
 
                         verify { parkingGuardNotifier.denyEntry(case.expectedReason) }
                         coVerify(exactly = 0) { parkingLifecycleService.reserveIfCapacityAvailable(any()) }
@@ -108,7 +111,7 @@ class ParkingControllerTest {
         coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
         coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns false
 
-        handler.handle(SensorEvent.VehicleEnteringEvent())
+        handler.handle(VehicleEnteringEvent())
 
         verify { parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS) }
     }
@@ -120,7 +123,7 @@ class ParkingControllerTest {
         coEvery { paymentStatusChecker.isPaymentComplete() } returns true.right()
         coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns true
 
-        handler.handle(SensorEvent.VehicleEnteringEvent())
+        handler.handle(VehicleEnteringEvent())
 
         coVerify { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) }
     }

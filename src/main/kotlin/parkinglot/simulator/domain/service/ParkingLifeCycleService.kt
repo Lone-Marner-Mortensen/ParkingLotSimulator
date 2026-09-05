@@ -4,15 +4,22 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
+import parkinglot.simulator.connector.sensor.system.adapter.ProcessingStatusSensorEventRepository
+import parkinglot.simulator.domain.connector.ParkingGuardNotifier
+import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
+import parkinglot.simulator.domain.model.SensorEvent.VehicleLeavingEvent
 import parkinglot.simulator.domain.repository.ParkingSpotRepository
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
-
-// Ensures atomicity for admission, occupation, and release of parking spots
+import java.time.Instant
 
 @Service
 class ParkingLifeCycleService(
     private val parkingSpotRepository: ParkingSpotRepository,
-    private val vehicleTransitRepository: VehicleTransitRepository
+    private val vehicleTransitRepository: VehicleTransitRepository,
+    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
+    private val parkingGuardNotifier: ParkingGuardNotifier
 ) {
     private val reservationMutex = Mutex()
 
@@ -30,14 +37,28 @@ class ParkingLifeCycleService(
     }
 
     @Transactional
-    fun occupyParkingSpot(licensePlate: String, spotId: String) {
-        parkingSpotRepository.occupyParkingSpot(licensePlate, spotId)
-        vehicleTransitRepository.removeVehicleInTransit(licensePlate)
+    fun occupyParkingSpot(event: ParkingSpotOccupiedEvent) {
+        parkingSpotRepository.occupyParkingSpot(event.licensePlate.value, event.spotId.value)
+        vehicleTransitRepository.removeVehicleInTransit(event.licensePlate.value)
+        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
     }
 
     @Transactional
-    fun releaseParkingSpot(licensePlate: String, spotId: String) {
-        parkingSpotRepository.releaseParkingSpot(spotId)
-        vehicleTransitRepository.removeVehicleInTransit(licensePlate)
+    fun releaseParkingSpot(event: ParkingSpotReleasedEvent) {
+        parkingSpotRepository.releaseParkingSpot(event.spotId.value)
+        vehicleTransitRepository.removeVehicleInTransit(event.licensePlate.value)
+        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
+    }
+
+    @Transactional
+    fun markVehicleAsLeaving(event: VehicleLeavingEvent) {
+        vehicleTransitRepository.addVehicleInTransit(event.licensePlate.value)
+        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
+    }
+
+    @Transactional
+    fun overStaying(event: OverStayingEvent) {
+        parkingGuardNotifier.vehicleHasOverStayed(event.licensePlate.value, event.spotId.value, event.duration)
+        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
     }
 }

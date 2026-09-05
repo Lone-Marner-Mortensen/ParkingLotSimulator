@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS vehicle_transits (
     CONSTRAINT vehicle_transit_license_plate_not_blank CHECK (btrim(license_plate) <> '')
 );
 
-CREATE TABLE processed_sensor_events (
-    event_id VARCHAR(36) NOT NULL PRIMARY KEY
+CREATE TABLE sensor_events_processing_status (
+    event_id VARCHAR(36) NOT NULL PRIMARY KEY,
+    sequence_number INT NULL,
+    is_processing BOOLEAN NULL,
+    processed_at TIMESTAMP NULL,
+    CONSTRAINT sensor_events_processing_status_sequence_number_positive
+        CHECK (sequence_number IS NULL OR sequence_number >= 1),
+    CONSTRAINT sensor_events_processing_status_processed_implies_not_processing
+        CHECK (processed_at IS NULL OR is_processing = false)
 );
