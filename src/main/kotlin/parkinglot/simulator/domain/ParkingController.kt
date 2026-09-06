@@ -1,18 +1,15 @@
 package parkinglot.simulator.domain
 
-import arrow.core.raise.either
-import arrow.fx.coroutines.parZip
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import jakarta.annotation.PreDestroy
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import parkinglot.simulator.domain.service.ParkingLifeCycleService
-import parkinglot.simulator.domain.connector.LicensePlateReader
-import parkinglot.simulator.domain.connector.ParkingGuardNotifier
-import parkinglot.simulator.domain.connector.PaymentStatusChecker
 import parkinglot.simulator.domain.connector.SensorEventHandler
-import parkinglot.simulator.domain.connector.VehicleSizeEstimator
-import parkinglot.simulator.domain.model.DenyEntryReason
 import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
 import parkinglot.simulator.domain.model.SensorEvent.VehicleLeavingEvent
@@ -22,18 +19,16 @@ import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
 @Service
 class ParkingController(
-    private val licensePlateReader: LicensePlateReader,
-    private val vehicleSizeEstimator: VehicleSizeEstimator,
-    private val paymentStatusChecker: PaymentStatusChecker,
-    private val parkingGuardNotifier: ParkingGuardNotifier,
     private val parkingLifecycleService: ParkingLifeCycleService
 ) : SensorEventHandler {
-    private val vehicleEnteringMutex = Mutex()
+    private val vehicleEnteringScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override suspend fun handle(event: SensorEvent) {
         logger.info("Handling sensor event {}", event)
         when (event) {
-            is VehicleEnteringEvent -> handleVehicleEntering()
+            is VehicleEnteringEvent -> vehicleEnteringScope.launch {
+                parkingLifecycleService.handleVehicleEntering(event)
+            }
             is VehicleLeavingEvent ->
                 parkingLifecycleService.markVehicleAsLeaving(event)
             is ParkingSpotOccupiedEvent ->
@@ -44,29 +39,9 @@ class ParkingController(
         }
     }
 
-    // We can assume that the vehicle entering events are Synchronously, See README (Only one entering lane).
-    private suspend fun handleVehicleEntering() = vehicleEnteringMutex.withLock {
-        parZip(
-            { licensePlateReader.read() },
-            { vehicleSizeEstimator.isVehicleTooBig() },
-            { paymentStatusChecker.wasPaymentSuccessful() }
-        ) { plate, size, payment ->
-            either {
-                size.bind()
-                payment.bind()
-                plate.bind()
-            }
-        }.fold(
-            { reason -> parkingGuardNotifier.denyEntry(reason) },
-            { plate ->
-                if (!parkingLifecycleService.reserveIfCapacityAvailable(plate)) {
-                    // This happens only in very rare occasions (if there is a technical error)
-                    // Because of the large number of parking spots, the client probably won't wait
-                    // long for a spot to become available. In worst case a refund needs to be processed.
-                    parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS)
-                }
-            }
-        )
+    @PreDestroy
+    fun close() {
+        vehicleEnteringScope.cancel()
     }
 
     companion object {

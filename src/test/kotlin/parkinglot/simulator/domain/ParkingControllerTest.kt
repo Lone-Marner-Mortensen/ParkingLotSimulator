@@ -1,25 +1,24 @@
 package parkinglot.simulator.domain
 
-import arrow.core.left
-import arrow.core.right
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
-import org.junit.jupiter.api.DynamicTest.dynamicTest
-import org.junit.jupiter.api.Nested
+import org.awaitility.Awaitility.await
+import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.TestFactory
-import parkinglot.simulator.domain.service.ParkingLifeCycleService
-import parkinglot.simulator.domain.connector.LicensePlateReader
-import parkinglot.simulator.domain.connector.ParkingGuardNotifier
-import parkinglot.simulator.domain.connector.PaymentStatusChecker
-import parkinglot.simulator.domain.connector.VehicleSizeEstimator
-import parkinglot.simulator.domain.model.DenyEntryReason
 import parkinglot.simulator.domain.model.LicensePlate
 import parkinglot.simulator.domain.model.ParkingSpotId
-import parkinglot.simulator.domain.repository.VehicleTransitRepository
+import parkinglot.simulator.domain.service.ParkingLifeCycleService
+import java.time.Duration
+import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
+import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
 import parkinglot.simulator.domain.model.SensorEvent.VehicleLeavingEvent
@@ -27,104 +26,62 @@ import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
 import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
 import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
-private data class DenialCase(
-    val description: String,
-    val expectedReason: DenyEntryReason,
-    val stub: () -> Unit
-)
-
 class ParkingControllerTest {
-    private val licensePlateReader = mockk<LicensePlateReader>()
-    private val vehicleSizeEstimator = mockk<VehicleSizeEstimator>()
-    private val paymentStatusChecker = mockk<PaymentStatusChecker>()
-    private val parkingGuardNotifier = mockk<ParkingGuardNotifier>(relaxed = true)
-    private val vehicleTransitRepository = mockk<VehicleTransitRepository>(relaxed = true)
     private val parkingLifecycleService = mockk<ParkingLifeCycleService>(relaxed = true)
-    private val handler = ParkingController(
-        licensePlateReader,
-        vehicleSizeEstimator,
-        paymentStatusChecker,
-        parkingGuardNotifier,
-        parkingLifecycleService
-    )
-    private val licensePlate = "AB123CD123"
-    private val spotId = "A1"
-    private val licensePlateValue = LicensePlate(licensePlate)
-    private val spotIdValue = ParkingSpotId(spotId)
+    private val handler = ParkingController(parkingLifecycleService)
+    private val licensePlateValue = LicensePlate("AB123CD123")
+    private val spotIdValue = ParkingSpotId("A1")
 
     @Test
-    fun `occupySpot, releaseSpot, leaving, and overstay events are delegated to their use cases`() = runTest {
+    fun `entering, occupySpot, releaseSpot, leaving, and overstay events are delegated to their use cases`() = runTest {
+        val enteringEvent = VehicleEnteringEvent()
         val occupiedEvent = ParkingSpotOccupiedEvent(licensePlateValue, spotIdValue)
         val releasedEvent = ParkingSpotReleasedEvent(licensePlateValue, spotIdValue)
         val leavingEvent = VehicleLeavingEvent(licensePlateValue, spotIdValue)
         val overStayingEvent = OverStayingEvent(licensePlateValue, spotIdValue, 15.minutes)
 
+        handler.handle(enteringEvent)
         handler.handle(occupiedEvent)
         handler.handle(releasedEvent)
         handler.handle(leavingEvent)
         handler.handle(overStayingEvent)
 
+        coVerify(timeout = 1_000) { parkingLifecycleService.handleVehicleEntering(enteringEvent) }
         verify { parkingLifecycleService.occupyParkingSpot(occupiedEvent) }
         verify { parkingLifecycleService.releaseParkingSpot(releasedEvent) }
         verify { parkingLifecycleService.markVehicleAsLeaving(leavingEvent) }
         verify { parkingLifecycleService.overStaying(overStayingEvent) }
     }
 
-    @Nested
-    inner class ParkingLotEntryDenial {
-        @TestFactory
-        fun `entry denied`() =
-            listOf(
-                DenialCase("vehicle is too big", DenyEntryReason.VEHICLE_TOO_BIG) {
-                    coEvery { licensePlateReader.read() } returns licensePlate.right()
-                    coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
-                    coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
-                },
-                DenialCase("payment fails", DenyEntryReason.PAYMENT_NOT_ACCEPTED) {
-                    coEvery { licensePlateReader.read() } returns licensePlate.right()
-                    coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-                    coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
-                },
-                DenialCase("license plate reading fails", DenyEntryReason.LICENSE_PLATE_NOT_READABLE) {
-                    coEvery { licensePlateReader.read() } returns DenyEntryReason.LICENSE_PLATE_NOT_READABLE.left()
-                    coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-                    coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
-                }
-            ).map { case ->
-                dynamicTest("is reported if ${case.description}") {
-                    runTest {
-                        case.stub()
-
-                        handler.handle(VehicleEnteringEvent())
-
-                        verify { parkingGuardNotifier.denyEntry(case.expectedReason) }
-                        coVerify(exactly = 0) { parkingLifecycleService.reserveIfCapacityAvailable(any()) }
-                    }
-                }
-            }
-    }
-
     @Test
-    fun `entry is denied after successful checks if capacity is unavailable`() = runTest {
-        coEvery { licensePlateReader.read() } returns licensePlate.right()
-        coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-        coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
-        coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns false
+    fun `handleVehicleEntering does not block handling of other events`() = runTest {
+        // when
+        val enteringEvent = VehicleEnteringEvent()
+        val releasedEvent = ParkingSpotReleasedEvent(licensePlateValue, spotIdValue)
 
-        handler.handle(VehicleEnteringEvent())
+        var releasedProcessed = false
+        var enteringCompleted = false
 
-        verify { parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS) }
-    }
+        coEvery { parkingLifecycleService.handleVehicleEntering(enteringEvent) } coAnswers {
+            delay(500)
+            enteringCompleted = true
+        }
+        every { parkingLifecycleService.releaseParkingSpot(releasedEvent) } answers {
+            releasedProcessed = true
+        }
 
-    @Test
-    fun `parking lot entry granted if vehicle is not too big and payment is complete and license plate is read successfully`() = runTest {
-        coEvery { licensePlateReader.read() } returns licensePlate.right()
-        coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-        coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
-        coEvery { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) } returns true
+        // then
+        handler.handle(enteringEvent)
+        handler.handle(releasedEvent)
 
-        handler.handle(VehicleEnteringEvent())
+        await().until { releasedProcessed }
 
-        coVerify { parkingLifecycleService.reserveIfCapacityAvailable(licensePlate) }
+        // expect
+        assertTrue(releasedProcessed)
+        assertFalse(enteringCompleted)
+
+        await().until { enteringCompleted }
+        coVerify(exactly = 1) { parkingLifecycleService.handleVehicleEntering(enteringEvent) }
+        verify(exactly = 1) { parkingLifecycleService.releaseParkingSpot(releasedEvent) }
     }
 }
