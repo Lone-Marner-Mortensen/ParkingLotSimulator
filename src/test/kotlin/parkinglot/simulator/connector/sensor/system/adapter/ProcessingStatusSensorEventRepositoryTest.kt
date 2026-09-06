@@ -112,7 +112,7 @@ class ProcessingStatusSensorEventRepositoryTest {
                 repository.setProcessingStatusToInProgress(earlierEvent, earlierSequenceNumber)
                 repository.setProcessingStatusToCompleted(earlierEvent, Instant.now())
             }
-            // Sequence number 9 is never marked as completed
+            // no events with sequence number 9 registered
 
             assertFalse(repository.isEarlierEventsCompleted(sequenceNumber = 10))
         }
@@ -139,7 +139,7 @@ class ProcessingStatusSensorEventRepositoryTest {
         }
 
         @Test
-        fun `is true when the event is in progress`() {
+        fun `is true when the event is processing`() {
             val event = VehicleEnteringEvent()
             repository.setProcessingStatusToInProgress(event, sequenceNumber = 1)
 
@@ -153,6 +153,37 @@ class ProcessingStatusSensorEventRepositoryTest {
             repository.setProcessingStatusToCompleted(event, Instant.now())
 
             assertFalse(repository.isProcessing(event.eventId))
+        }
+    }
+
+    @Nested
+    inner class AllEventsCompleted {
+        @Test
+        fun `is true when there are no events`() {
+            assertTrue(repository.allEventsCompleted(emptyList()))
+        }
+
+        @Test
+        fun `is true when every given event has been completed`() {
+            val event1 = VehicleEnteringEvent()
+            val event2 = VehicleEnteringEvent()
+            repository.setProcessingStatusToInProgress(event1, sequenceNumber = 1)
+            repository.setProcessingStatusToCompleted(event1, Instant.now())
+            repository.setProcessingStatusToInProgress(event2, sequenceNumber = 2)
+            repository.setProcessingStatusToCompleted(event2, Instant.now())
+
+            assertTrue(repository.allEventsCompleted(listOf(event1, event2)))
+        }
+
+        @Test
+        fun `is false when a given event is still in progress`() {
+            val completedEvent = VehicleEnteringEvent()
+            repository.setProcessingStatusToInProgress(completedEvent, sequenceNumber = 1)
+            repository.setProcessingStatusToCompleted(completedEvent, Instant.now())
+            val inProgressEvent = VehicleEnteringEvent()
+            repository.setProcessingStatusToInProgress(inProgressEvent, sequenceNumber = 2)
+
+            assertFalse(repository.allEventsCompleted(listOf(completedEvent, inProgressEvent)))
         }
     }
 }

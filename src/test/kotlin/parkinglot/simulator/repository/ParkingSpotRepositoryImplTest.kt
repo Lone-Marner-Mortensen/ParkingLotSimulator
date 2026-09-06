@@ -84,4 +84,16 @@ class ParkingSpotRepositoryImplTest {
         assertEquals(50, repository.getFreeParkingSpots().size)
         assertTrue(repository.getFreeParkingSpots().any { it == spotId })
     }
+
+    @Test
+    fun `releaseAllParkingSpots clears licensePlate on every occupied spot`() {
+        repository.occupyParkingSpot("GH24680", "A13")
+        repository.occupyParkingSpot("IJ97531", "A14")
+
+        repository.releaseAllParkingSpots()
+
+        assertEquals(50, repository.getFreeParkingSpots().size)
+        assertNull(assertNotNull(jpaRepository.findByIdOrNull("A13")).licensePlate)
+        assertNull(assertNotNull(jpaRepository.findByIdOrNull("A14")).licensePlate)
+    }
 }

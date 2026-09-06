@@ -36,4 +36,7 @@ class ProcessingStatusSensorEventRepository(
 
     fun isProcessing(eventId: String): Boolean =
         jpaRepository.findById(eventId).orElse(null)?.isProcessing == true
+
+    fun allEventsCompleted(events: List<SensorEvent>): Boolean =
+        !jpaRepository.existsByEventIdInAndProcessedAtIsNull(events.map { it.eventId })
 }

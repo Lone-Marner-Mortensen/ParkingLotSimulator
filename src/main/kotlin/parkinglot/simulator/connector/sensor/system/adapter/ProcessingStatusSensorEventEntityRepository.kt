@@ -4,4 +4,5 @@ import org.springframework.data.jpa.repository.JpaRepository
 
 interface ProcessingStatusSensorEventEntityRepository : JpaRepository<ProcessingStatusSensorEventEntity, String> {
     fun countBySequenceNumberLessThanAndProcessedAtIsNotNull(sequenceNumber: Int): Long
+    fun existsByEventIdInAndProcessedAtIsNull(eventIds: List<String>): Boolean
 }

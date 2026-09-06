@@ -1,6 +1,6 @@
 # Parking Lot Simulator
 
-A parking lot simulation project built with Spring Boot. </br>
+A parking lot simulation project built with kotlin and Spring Boot. </br>
 It gives the number of vehicles who can enter the parking lot and which spots are available. </br> </br>
 **A lot of classes/implementations are abstracted away.** </br>
 **We pretend that there are a sensor system, payment system and a parking guard notification system
@@ -13,13 +13,13 @@ Everything depends on the domain, which exposes interfaces to the other componen
 
 The simulator is designed around a `ParkingController` that listens to sensor events such as:
 
-| Event | Meaning                                                                                                |
-| --- |--------------------------------------------------------------------------------------------------------|
+| Event | Meaning                                                                                            |
+| --- |----------------------------------------------------------------------------------------------------|
 | vehicle entering | The vehicle is actively being checked to determine whether it is allowed to enter the parking lot. |
-| parking spot occupied | A vehicle has occupied a parking spot.                                                                 |
-| vehicle leaving | The vehicle is leaving the parking lot, but the spot is not yet released.                              |
-| parking spot released | A vehicle has left a parking spot, making it available.                                                |
-| vehicle overstaying | A vehicle has exceeded the allowed parking time.                                                       |
+| parking spot occupied | A vehicle has just occupied a parking spot.                                                        |
+| vehicle leaving | The vehicle is leaving the parking lot, but the spot is not yet released.                          |
+| parking spot released | A vehicle has just left a parking spot, making it available.                                       |
+| vehicle overstaying | A vehicle has exceeded the allowed parking time.                                                   |
 
 It evaluates the events against external checks (plate reading, size estimation, payment status) and decides whether to allow entry or notify the parking guard.
 #### Only one entering lane
@@ -56,7 +56,7 @@ Run the application with:
 This starts the PostgreSQL container via Docker Compose and then launches the application. 
 You can also run the application directly from IntelliJ. </br> 
 
-If the input is not valid, the application throws a descriptive exception and stops.
+If the input is not valid, you will see an error-message and the application stops.
 
 #### Running on a predefined event list
 

@@ -18,7 +18,6 @@ class ParkingSpotRepositoryImpl(
             .map { it.copy(licensePlate = licensePlate) }
             .map(mapper::toEntity)
             .map(jpaRepository::save)
-            .orElse(null)
     }
 
     override fun releaseParkingSpot(spotId: String) {
@@ -27,7 +26,6 @@ class ParkingSpotRepositoryImpl(
             .map { it.copy(licensePlate = null) }
             .map(mapper::toEntity)
             .map(jpaRepository::save)
-            .orElse(null)
     }
 
     @Transactional

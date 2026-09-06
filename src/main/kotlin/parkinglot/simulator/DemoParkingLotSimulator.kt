@@ -9,10 +9,13 @@ import org.springframework.boot.CommandLineRunner
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import parkinglot.simulator.connector.sensor.system.EventPublisher
+import parkinglot.simulator.connector.sensor.system.adapter.ProcessingStatusSensorEventRepository
 import parkinglot.simulator.domain.model.builder.sensorEvents
 import parkinglot.simulator.domain.model.builder.spots
 import parkinglot.simulator.domain.model.LicensePlate
 import org.awaitility.Awaitility.await
+import parkinglot.simulator.domain.exception.DuplicateEventException
+import parkinglot.simulator.domain.exception.InvalidEventException
 import parkinglot.simulator.domain.repository.ParkingSpotRepository
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
 import kotlin.time.Duration.Companion.minutes
@@ -23,6 +26,7 @@ class DemoParkingLotSimulator(
     private val eventPublisher: EventPublisher,
     private val vehicleTransitRepository: VehicleTransitRepository,
     private val parkingSpotRepository: ParkingSpotRepository,
+    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
     private val meterRegistry: MeterRegistry
 ) : CommandLineRunner {
 
@@ -61,7 +65,7 @@ class DemoParkingLotSimulator(
                 eventPublisher.simulateEventEmissions(events)
             }
 
-            await().until { eventsHandled() >= events.size }
+            await().until { processingStatusSensorEventRepository.allEventsCompleted(events) }
 
             val demoSpots = spots("A", 19..25) + spots("B", 1..3)
             val occupiedSpots = demoSpots.filterNot { it.value in parkingSpotRepository.getFreeParkingSpots() }.toSet()
@@ -69,16 +73,22 @@ class DemoParkingLotSimulator(
             logger.info("Taken spots: ${occupiedSpots.map { it.value }}")
             logger.info("Vehicles in transit: ${vehicleTransitRepository.getNumberOfVehiclesInTransit()}")
             logger.info("")
+
             exitProcess(0)
-        } catch (exception: Exception) {
-            logger.error("DemoParkingLotSimulator failed: {}", exception.message, exception)
+        }
+        catch (exception: Exception) {
+            logger.info("")
+            when (exception) {
+                is IllegalArgumentException, is DuplicateEventException, is InvalidEventException ->
+                    logger.error("DemoParkingLotSimulator failed: {}", exception.message)
+                else ->
+                    logger.error("DemoParkingLotSimulator failed: {}", exception.message, exception)
+            }
+            logger.info("")
+
+            exitProcess(1)
         }
     }
-
-    private fun eventsHandled(): Int =
-        listOf("processed", "duplicate", "invalid", "failed").sumOf {
-            meterRegistry.counter("parking.sensor.events", "outcome", it).count().toInt()
-        }
 
     companion object {
         private val logger = LoggerFactory.getLogger(DemoParkingLotSimulator::class.java)
