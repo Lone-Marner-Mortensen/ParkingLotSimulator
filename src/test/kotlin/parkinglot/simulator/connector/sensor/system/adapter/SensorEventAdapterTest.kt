@@ -249,7 +249,7 @@ class SensorEventAdapterTest {
             val events = List(4) {
                 ParkingSpotOccupiedEvent(
                     LicensePlate((1..10).map { ('A'..'Z').random() }.joinToString("")),
-                    ParkingSpotId("${listOf("A", "B").random()}${(1..25).random()}")
+                    ParkingSpotId("${listOf("A", "B").random()}${(1..50).random()}")
                 )
             }
             val processingTime = 200L

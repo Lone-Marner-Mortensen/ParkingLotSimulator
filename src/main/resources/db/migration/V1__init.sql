@@ -8,12 +8,12 @@ CREATE TABLE IF NOT EXISTS parking_spots (
 
 INSERT INTO parking_spots (spot, license_plate)
 SELECT 'A' || gs.i, NULL
-FROM generate_series(1, 25) AS gs(i)
+FROM generate_series(1, 50) AS gs(i)
 ON CONFLICT (spot) DO NOTHING;
 
 INSERT INTO parking_spots (spot, license_plate)
 SELECT 'B' || gs.i, NULL
-FROM generate_series(1, 25) AS gs(i)
+FROM generate_series(1, 50) AS gs(i)
 ON CONFLICT (spot) DO NOTHING;
 
 CREATE UNIQUE INDEX parking_spots_unique_license_plate

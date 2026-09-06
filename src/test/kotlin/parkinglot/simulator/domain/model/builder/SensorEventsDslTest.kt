@@ -87,7 +87,7 @@ class SensorEventsDslTest {
 
     @Test
     fun `ParkingSpotId rejects a value outside the allowed parking spot range`() {
-        listOf("A0", "A26", "B0", "B26", "C1", "AA1", "A01").forEach {
+        listOf("A0", "A51", "B0", "B51", "C1", "AA1", "A01").forEach {
             assertFailsWith<IllegalArgumentException> { ParkingSpotId(it) }
         }
     }

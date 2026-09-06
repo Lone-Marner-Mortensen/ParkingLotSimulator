@@ -77,11 +77,11 @@ class ParkingSpotRepositoryImplTest {
         val licensePlate = "EF13579"
 
         repository.occupyParkingSpot(licensePlate, spotId)
-        assertEquals(49, repository.getFreeParkingSpots().size)
+        assertEquals(99, repository.getFreeParkingSpots().size)
         assertTrue(repository.getFreeParkingSpots().none { it == spotId })
 
         repository.releaseParkingSpot(spotId)
-        assertEquals(50, repository.getFreeParkingSpots().size)
+        assertEquals(100, repository.getFreeParkingSpots().size)
         assertTrue(repository.getFreeParkingSpots().any { it == spotId })
     }
 
@@ -92,7 +92,7 @@ class ParkingSpotRepositoryImplTest {
 
         repository.releaseAllParkingSpots()
 
-        assertEquals(50, repository.getFreeParkingSpots().size)
+        assertEquals(100, repository.getFreeParkingSpots().size)
         assertNull(assertNotNull(jpaRepository.findByIdOrNull("A13")).licensePlate)
         assertNull(assertNotNull(jpaRepository.findByIdOrNull("A14")).licensePlate)
     }
