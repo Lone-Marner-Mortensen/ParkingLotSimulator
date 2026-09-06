@@ -80,7 +80,8 @@ Since the validity of an event can depend on previous events, assessing the vali
 require examining the entire event list. Therefore, early validation—validating all events before the first event is 
 fully processed—would slow down the application and has not been implemented.
 ### Stop the app
+Stop the app with `Ctrl+C`, then stop and remove the Postgres container:
+
 ```bash
-./gradlew stop
+./gradlew stop-db
 ```
-Stops docker and removes the PostgreSQL container and stops the application.

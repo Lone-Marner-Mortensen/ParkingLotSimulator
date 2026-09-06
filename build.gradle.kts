@@ -73,8 +73,8 @@ tasks.register("start") {
     dependsOn(composeUp, "bootRun")
 }
 
-tasks.register("stop") {
+tasks.register("stop-db") {
     group = "application"
-    description = "Stops and removes the Postgres container. Stop the application."
+    description = "Stops and removes the Postgres container."
     dependsOn(composeDown)
 }
