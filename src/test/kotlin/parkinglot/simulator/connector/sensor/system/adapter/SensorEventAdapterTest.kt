@@ -60,11 +60,20 @@ class SensorEventAdapterTest {
         eventSource: SensorEventSource = publisher,
         eventHandler: SensorEventHandler = this.eventHandler,
         eventValidator: EventValidator = mockk(relaxed = true),
-        processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository = this@SensorEventAdapterTest.processingStatusSensorEventRepository,
+        processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository =
+            this@SensorEventAdapterTest.processingStatusSensorEventRepository,
         meterRegistry: MeterRegistry = this.meterRegistry,
         earlierEventsPollIntervalMs: Long = 10,
         earlierEventsMaxPolls: Int = 10
-    ) = SensorEventAdapter(eventSource, eventHandler, eventValidator, processingStatusSensorEventRepository, meterRegistry, earlierEventsPollIntervalMs, earlierEventsMaxPolls)
+    ) = SensorEventAdapter(
+        eventSource,
+        eventHandler,
+        eventValidator,
+        processingStatusSensorEventRepository,
+        meterRegistry,
+        earlierEventsPollIntervalMs,
+        earlierEventsMaxPolls
+    )
 
     @Test
     fun `start is idempotent and stop clears running state`() {
@@ -167,7 +176,9 @@ class SensorEventAdapterTest {
             val eventValidator = eventValidatorWithEarlierEventsValid(listOf(false, false))
             coEvery { eventHandler.handle(any()) } just Runs
             every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
-            every { processingStatusSensorEventRepository.isEarlierEventsCompleted(3) } returnsMany listOf(false, false, true)
+            every {
+                processingStatusSensorEventRepository.isEarlierEventsCompleted(3)
+            } returnsMany listOf(false, false, true)
             val adapter = sensorEventAdapter(eventValidator = eventValidator)
 
             try {
@@ -196,7 +207,9 @@ class SensorEventAdapterTest {
             val eventValidator = eventValidatorWithEarlierEventsValid(listOf(false, true))
             coEvery { eventHandler.handle(any()) } just Runs
             every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
-            every { processingStatusSensorEventRepository.isEarlierEventsCompleted(3) } returnsMany listOf(false, false, true)
+            every {
+                processingStatusSensorEventRepository.isEarlierEventsCompleted(3)
+            } returnsMany listOf(false, false, true)
             val adapter = sensorEventAdapter(eventValidator = eventValidator)
 
             try {
@@ -205,7 +218,9 @@ class SensorEventAdapterTest {
                 publisher.simulateEventEmissions(listOf(earlierEvent1, earlierEvent2, event))
 
                 // expect
-                verify(timeout = 1_000, exactly = 3) { processingStatusSensorEventRepository.isEarlierEventsCompleted(3) }
+                verify(timeout = 1_000, exactly = 3) {
+                    processingStatusSensorEventRepository.isEarlierEventsCompleted(3)
+                }
                 verify(exactly = 2) { eventValidator.isValid(event) }
                 assertTrue(adapter.isRunning)
             } finally {
@@ -229,7 +244,9 @@ class SensorEventAdapterTest {
                 publisher.simulateEventEmissions(listOf(event))
 
                 // expect
-                verify(timeout = 1_000, exactly = 3) { processingStatusSensorEventRepository.isEarlierEventsCompleted(1) }
+                verify(timeout = 1_000, exactly = 3) {
+                    processingStatusSensorEventRepository.isEarlierEventsCompleted(1)
+                }
                 assertThrows<InvalidEventException> {
                     runBlocking { adapter.awaitFailure() }
                 }
@@ -264,7 +281,9 @@ class SensorEventAdapterTest {
 
                 val processedAtSlots = events.map { event ->
                     val slot = slot<Instant>()
-                    verify(timeout = 2_000) { processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, capture(slot)) }
+                    verify(timeout = 2_000) {
+                        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, capture(slot))
+                    }
                     slot.captured
                 }
 

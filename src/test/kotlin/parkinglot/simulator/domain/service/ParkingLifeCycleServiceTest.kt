@@ -112,13 +112,17 @@ class ParkingLifeCycleServiceTest {
                 listOf(
                     DenialCase("vehicle is too big", DenyEntryReason.VEHICLE_TOO_BIG) {
                         coEvery { licensePlateReader.read() } returns licensePlate.right()
-                        coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
+                        coEvery {
+                            vehicleSizeEstimator.isVehicleTooBig()
+                        } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
                         coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
                     },
                     DenialCase("payment fails", DenyEntryReason.PAYMENT_NOT_ACCEPTED) {
                         coEvery { licensePlateReader.read() } returns licensePlate.right()
                         coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
-                        coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
+                        coEvery {
+                            paymentStatusChecker.wasPaymentSuccessful()
+                        } returns DenyEntryReason.PAYMENT_NOT_ACCEPTED.left()
                     },
                     DenialCase("license plate reading fails", DenyEntryReason.LICENSE_PLATE_NOT_READABLE) {
                         coEvery { licensePlateReader.read() } returns DenyEntryReason.LICENSE_PLATE_NOT_READABLE.left()
@@ -161,13 +165,14 @@ class ParkingLifeCycleServiceTest {
             service.handleVehicleEntering(VehicleEnteringEvent())
 
             // expect
-            verify(timeout = 2_000, exactly = 3) { vehicleTransitRepository.getNumberOfVehiclesInTransit() } // 3 checks for capacity
+            // 3 checks for capacity
+            verify(timeout = 2_000, exactly = 3) { vehicleTransitRepository.getNumberOfVehiclesInTransit() }
             verify { vehicleTransitRepository.addVehicleInTransit(licensePlate) } // capacity reserved
             verify(exactly = 0) { parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS) }
         }
 
         @Test
-        fun `parking lot entry granted if vehicle is not too big, payment was successful, license plate was read successfully and spots available`() = runTest {
+        fun `parking lot entry granted when all checks pass and a spot is available`() = runTest {
             // when
             coEvery { licensePlateReader.read() } returns licensePlate.right()
             coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()

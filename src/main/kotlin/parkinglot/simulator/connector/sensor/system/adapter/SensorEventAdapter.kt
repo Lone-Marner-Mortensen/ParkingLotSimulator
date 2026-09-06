@@ -58,7 +58,10 @@ class SensorEventAdapter(
 
                         if (!eventValidator.isValid(event)) {
                             meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
-                            throw InvalidEventException(event, "Invalid sensor event $event. Event ordering is violated.")
+                            throw InvalidEventException(
+                                event,
+                                "Invalid sensor event $event. Event ordering is violated."
+                            )
                         }
                     }
 

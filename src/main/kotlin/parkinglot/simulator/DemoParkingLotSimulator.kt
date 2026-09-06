@@ -1,7 +1,6 @@
 package parkinglot.simulator
 
 import arrow.core.tail
-import io.micrometer.core.instrument.MeterRegistry
 import kotlin.system.exitProcess
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
@@ -26,8 +25,7 @@ class DemoParkingLotSimulator(
     private val eventPublisher: EventPublisher,
     private val vehicleTransitRepository: VehicleTransitRepository,
     private val parkingSpotRepository: ParkingSpotRepository,
-    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
-    private val meterRegistry: MeterRegistry
+    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository
 ) : CommandLineRunner {
 
     override fun run(vararg args: String) {
@@ -38,11 +36,14 @@ class DemoParkingLotSimulator(
 
             val plateGroup3 = listOf(LicensePlate("LIPLA88888"), LicensePlate("LIPLA99999"), LicensePlate("LIPLA10101"))
 
-            // Make sure events are valid. For example, if a car is occupying a parking spot, it must be in transit first.
+            // Make sure events are valid. For example, if a car is occupying
+            // a parking spot, it must be in transit first.
             vehicleTransitRepository.removeAllVehiclesInTransit()
             parkingSpotRepository.releaseAllParkingSpots()
             (plateGroup1 + plateGroup2).forEach { vehicleTransitRepository.addVehicleInTransit(it.value) }
-            plateGroup3.zip(spots("B", 1..3)).forEach { (plate, spot) -> parkingSpotRepository.occupyParkingSpot(plate.value, spot.value) }
+            plateGroup3.zip(spots("B", 1..3)).forEach { (plate, spot) ->
+                parkingSpotRepository.occupyParkingSpot(plate.value, spot.value)
+            }
 
             // Define events to simulate
             val events = sensorEvents {

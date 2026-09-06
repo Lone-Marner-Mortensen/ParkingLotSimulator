@@ -31,8 +31,10 @@ class ProcessingStatusSensorEventRepository(
         )
     }
 
-    fun isEarlierEventsCompleted(sequenceNumber: Int): Boolean =
-        jpaRepository.countBySequenceNumberLessThanAndProcessedAtIsNotNull(sequenceNumber) == (sequenceNumber - 1).toLong()
+    fun isEarlierEventsCompleted(sequenceNumber: Int): Boolean {
+        val completedEarlierEvents = jpaRepository.countBySequenceNumberLessThanAndProcessedAtIsNotNull(sequenceNumber)
+        return completedEarlierEvents == (sequenceNumber - 1).toLong()
+    }
 
     fun isProcessing(eventId: String): Boolean =
         jpaRepository.findById(eventId).orElse(null)?.isProcessing == true

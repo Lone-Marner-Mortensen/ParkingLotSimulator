@@ -68,7 +68,8 @@ class EventValidatorImplTest {
                 { plate, spot -> OverStayingEvent(plate, spot, 5.minutes) }
             ).map { buildEvent ->
                 val event = buildEvent(licensePlate, spotId)
-                dynamicTest("${event::class.simpleName} is invalid when the spot id is not found in ParkingSpotRepository") {
+                val eventName = event::class.simpleName
+                dynamicTest("$eventName is invalid when the spot id is not found in ParkingSpotRepository") {
                     every { parkingSpotRepository.existsBySpotId(spotId.value) } returns false
 
                     assertFalse(validator.isValid(event))
