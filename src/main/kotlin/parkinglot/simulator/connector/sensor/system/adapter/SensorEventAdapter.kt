@@ -11,7 +11,6 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import io.micrometer.core.instrument.MeterRegistry
 import kotlinx.coroutines.CompletableDeferred
 import org.slf4j.LoggerFactory
@@ -25,7 +24,6 @@ import parkinglot.simulator.domain.exception.InvalidEventException
 import parkinglot.simulator.domain.validator.EventValidator
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
-import kotlin.time.Duration.Companion.seconds
 
 
 // Making sure events are processed exactly once, are valid and retries 3 times in case of failure
@@ -36,10 +34,12 @@ class SensorEventAdapter(
     private val eventValidator: EventValidator,
     private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
     private val meterRegistry: MeterRegistry,
-    @Value("\${parking.sensor.events.earlier-events-completion-timeout-ms:5000}")
-    earlierEventsCompletionTimeoutMs: Int
+    @Value("\${parking.sensor.events.earlier-events-poll-interval-ms:30000}")
+    earlierEventsPollIntervalMs: Long = 30_000,
+    @Value("\${parking.sensor.events.earlier-events-max-polls:10}")
+    private val earlierEventsMaxPolls: Int = 10
 ) : SmartLifecycle {
-    private val earlierEventsCompletionTimeout: Duration = earlierEventsCompletionTimeoutMs.milliseconds
+    private val earlierEventsPollInterval: Duration = earlierEventsPollIntervalMs.milliseconds
     private var failure = CompletableDeferred<Throwable>()
     private val exceptionHandler = CoroutineExceptionHandler { _, exception ->
         failure.complete(exception)
@@ -54,7 +54,7 @@ class SensorEventAdapter(
         consumerJob = scope.launch {
                 eventSource.observeEvents().collect { event ->
                     if (!eventValidator.isValid(event)) {
-                        awaitEarlierEventsCompletion(sequenceNumber + 1, earlierEventsCompletionTimeout)
+                        awaitEarlierEventsCompletion(sequenceNumber + 1)
 
                         if (!eventValidator.isValid(event)) {
                             meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
@@ -98,10 +98,17 @@ class SensorEventAdapter(
 
     internal suspend fun awaitFailure(): Nothing = throw failure.await()
 
-    private suspend fun awaitEarlierEventsCompletion(sequenceNumber: Int, maxWait: Duration) {
-        withTimeoutOrNull(maxWait) {
-            while (!processingStatusSensorEventRepository.isEarlierEventsCompleted(sequenceNumber)) {
-                delay(EARLIER_EVENTS_POLL_INTERVAL)
+    private suspend fun awaitEarlierEventsCompletion(sequenceNumber: Int) {
+        repeat(earlierEventsMaxPolls) { attempt ->
+            if (processingStatusSensorEventRepository.isEarlierEventsCompleted(sequenceNumber)) {
+                return
+            }
+            if (attempt < earlierEventsMaxPolls - 1) {
+                logger.info(
+                    "Waiting for earlier events to be completed before processing event with sequence number {}",
+                    sequenceNumber
+                )
+                delay(earlierEventsPollInterval)
             }
         }
     }
@@ -137,6 +144,5 @@ class SensorEventAdapter(
         private val logger = LoggerFactory.getLogger(SensorEventAdapter::class.java)
         private const val EVENT_PROCESSING_ATTEMPTS = 3
         private val EVENT_RETRY_DELAY = 100.milliseconds
-        private val EARLIER_EVENTS_POLL_INTERVAL = 50.milliseconds
     }
 }
