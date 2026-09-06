@@ -8,7 +8,13 @@ import io.mockk.every
 import io.mockk.just
 import io.mockk.mockk
 import io.mockk.Runs
+import io.mockk.slot
 import io.mockk.verify
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.awaitility.Awaitility.await
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -20,10 +26,28 @@ import parkinglot.simulator.domain.connector.SensorEventHandler
 import parkinglot.simulator.domain.connector.SensorEventSource
 import parkinglot.simulator.domain.exception.DuplicateEventException
 import parkinglot.simulator.domain.exception.InvalidEventException
+import parkinglot.simulator.domain.model.LicensePlate
+import parkinglot.simulator.domain.model.ParkingSpotId
+import parkinglot.simulator.domain.model.SensorEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
 import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
 import parkinglot.simulator.domain.validator.EventValidator
+import kotlinx.coroutines.delay
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import java.time.Duration
+import java.time.Instant
+
+private class FixedProcessingTimeSensorEventHandler(
+    private val processingTime: Long,
+    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository
+) : SensorEventHandler {
+    override suspend fun handle(event: SensorEvent) {
+        delay(processingTime)
+        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
+    }
+}
 
 class SensorEventAdapterTest {
     private val event = VehicleEnteringEvent()
@@ -74,7 +98,7 @@ class SensorEventAdapterTest {
     }
 
     @Test
-    fun `duplicate event is not handled and throws exception and stops`() {
+    fun `duplicate event is not handled and throws exception and stop program`() {
         val eventValidator = mockk<EventValidator> { every { isValid(any()) } returns true }
         coEvery { eventHandler.handle(any()) } just Runs
         every { processingStatusSensorEventRepository.isProcessing(event.eventId) } returnsMany listOf(false, true)
@@ -108,7 +132,7 @@ class SensorEventAdapterTest {
             }
 
         @Test
-        fun `event still invalid after waiting for earlier events to complete throws exception and stops`() {
+        fun `event still invalid after waiting for earlier events to complete throws exception and stop program`() {
             val eventValidator = eventValidatorWithEarlierEventsValid(listOf(false, false))
             coEvery { eventHandler.handle(any()) } just Runs
             every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
@@ -155,8 +179,87 @@ class SensorEventAdapterTest {
         }
     }
 
+    @Nested
+    inner class Concurrency {
+        @Test
+        fun `when event-handler doesn't start a new thread then events are processed synchronously`() {
+            val eventValidator = mockk<EventValidator> { every { isValid(any()) } returns true }
+
+            val events = List(4) {
+                ParkingSpotOccupiedEvent(
+                    LicensePlate((1..10).map { ('A'..'Z').random() }.joinToString("")),
+                    ParkingSpotId("${listOf("A", "B").random()}${(1..25).random()}")
+                )
+            }
+            val processingTime = 200L
+            val handler = FixedProcessingTimeSensorEventHandler(processingTime, processingStatusSensorEventRepository)
+
+            val adapter = sensorEventAdapter(eventValidator = eventValidator, eventHandler = handler)
+
+            try {
+                adapter.start()
+                publisher.simulateEventEmissions(events)
+
+                val processedAtSlots = events.map { event ->
+                    val slot = slot<Instant>()
+                    verify(timeout = 2_000) { processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, capture(slot)) }
+                    slot.captured
+                }
+
+                processedAtSlots.zipWithNext().forEach { (earlier, later) ->
+                    assertTrue(Duration.between(earlier, later).toMillis() >= processingTime)
+                }
+            } finally {
+                adapter.close()
+            }
+        }
+
+        @Test
+        fun `when event-handler starts a new thread for VehicleEnteringEvents then it is handled concurrently with the other events`() {
+            val eventValidator = mockk<EventValidator> { every { isValid(any()) } returns true }
+            every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
+
+            val enteringEvent = VehicleEnteringEvent()
+            val spotReleasedEvent = ParkingSpotReleasedEvent(LicensePlate("AB123CD123"), ParkingSpotId("A1"))
+            val eventsInEmissionOrder = listOf(enteringEvent, spotReleasedEvent)
+
+            var spotReleasedProcessed = false
+            var enteringCompleted = false
+
+            val vehicleEnteringBackgroundScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            coEvery { eventHandler.handle(enteringEvent) } coAnswers {
+                vehicleEnteringBackgroundScope.launch {
+                    delay(500)
+                    enteringCompleted = true
+                }
+            }
+            coEvery { eventHandler.handle(spotReleasedEvent) } coAnswers {
+                spotReleasedProcessed = true
+            }
+
+            val adapter = sensorEventAdapter(eventValidator = eventValidator)
+
+            try {
+                adapter.start()
+                publisher.simulateEventEmissions(eventsInEmissionOrder)
+
+                await().until { spotReleasedProcessed }
+
+                assertTrue(spotReleasedProcessed)
+                assertFalse(enteringCompleted)
+
+                await().until { enteringCompleted }
+                coVerify(exactly = 1) { eventHandler.handle(enteringEvent) }
+                coVerify(exactly = 1) { eventHandler.handle(spotReleasedEvent) }
+            } finally {
+                vehicleEnteringBackgroundScope.cancel()
+                adapter.close()
+            }
+        }
+    }
+
     @Test
-    fun `failed event is retried 3 times and rethrow exception and stops`() {
+    fun `failed event is retried 3 times and rethrow exception and stop program`() {
         val eventValidator = mockk<EventValidator> { every { isValid(any()) } returns true }
         coEvery { eventHandler.handle(event) } throws IllegalStateException("persistence unavailable")
         val adapter = sensorEventAdapter(eventValidator = eventValidator)
