@@ -2,13 +2,15 @@ package parkinglot.simulator.domain.service
 
 import arrow.core.raise.either
 import arrow.fx.coroutines.parZip
+import io.micrometer.core.instrument.MeterRegistry
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import org.springframework.transaction.annotation.Transactional
-import parkinglot.simulator.connector.sensor.system.adapter.ProcessingStatusSensorEventRepository
+import parkinglot.simulator.domain.repository.ProcessingStatusSensorEventRepository
 import parkinglot.simulator.domain.connector.LicensePlateReader
 import parkinglot.simulator.domain.connector.ParkingGuardNotifier
 import parkinglot.simulator.domain.connector.PaymentStatusChecker
@@ -25,42 +27,50 @@ import java.time.Instant
 import kotlin.time.Duration.Companion.seconds
 
 @Service
-class ParkingLifeCycleService(
+open class ParkingLifeCycleService(
     private val parkingSpotRepository: ParkingSpotRepository,
     private val vehicleTransitRepository: VehicleTransitRepository,
     private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
     private val parkingGuardNotifier: ParkingGuardNotifier,
     private val licensePlateReader: LicensePlateReader,
     private val vehicleSizeEstimator: VehicleSizeEstimator,
-    private val paymentStatusChecker: PaymentStatusChecker
+    private val paymentStatusChecker: PaymentStatusChecker,
+    private val meterRegistry: MeterRegistry
 ) {
+     // using locks is not scalable (if you want multiple JVM instances), but I don't want complex db code and
+     // scalability is not relevant for problems like this.
     private val reservationMutex = Mutex()
     private val vehicleEnteringMutex = Mutex()
 
     // We can assume that the vehicle entering events are Synchronously, See README (Only one entering lane).
     suspend fun handleVehicleEntering(event: VehicleEnteringEvent) = vehicleEnteringMutex.withLock {
-        parZip(
-            { licensePlateReader.read() },
-            { vehicleSizeEstimator.isVehicleTooBig() },
-            { paymentStatusChecker.wasPaymentSuccessful() }
-        ) { plate, size, payment ->
+        try {
             either {
-                size.bind()
-                payment.bind()
-                plate.bind()
-            }
-        }.fold(
-            { reason -> parkingGuardNotifier.denyEntry(reason) },
-            { plate ->
-                // Because of the large number of parking spots, it will probably not take long for
-                // a spot to be available. Worst case he will get his money back.
-                if (!reserveCapacityWithRetry(plate)) {
-                    parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS)
+                parZip(
+                    { licensePlateReader.read().bind() },
+                    { vehicleSizeEstimator.isVehicleTooBig().bind() },
+                    { paymentStatusChecker.wasPaymentSuccessful().bind() }
+                ) { plate, _, _ -> plate }
+            }.fold(
+                { reason -> parkingGuardNotifier.denyEntry(reason) },
+                { plate ->
+                    // If there are no spots available, the car will probably not wait long.
+                    // There are only one lane, so he will be the first in the queue. There are also many spots.
+                    if (!reserveCapacityWithRetry(plate.value)) {
+                        parkingGuardNotifier.denyEntry(DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS)
+                    }
                 }
-            }
-        )
-
-        processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
+            )
+        } catch (exception: CancellationException) {
+            throw exception
+        } catch (exception: Exception) {
+            // ParkingLotManager launches this fire-and-forget, so a failure here can't propagate back to
+            // the SensorEventAdapter's retry/redelivery logic. We therefore catch and record it here.
+            meterRegistry.counter("parking.controller.vehicle_entering", "outcome", "failed").increment()
+            logger.error("Handling vehicle entering event {} failed", event.eventId, exception)
+        } finally {
+            processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
+        }
     }
 
     private suspend fun reserveCapacityWithRetry(plate: String): Boolean {
@@ -89,27 +99,27 @@ class ParkingLifeCycleService(
     }
 
     @Transactional
-    fun occupyParkingSpot(event: ParkingSpotOccupiedEvent) {
+    open fun occupyParkingSpot(event: ParkingSpotOccupiedEvent) {
         parkingSpotRepository.occupyParkingSpot(event.licensePlate.value, event.spotId.value)
         vehicleTransitRepository.removeVehicleInTransit(event.licensePlate.value)
         processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
     }
 
     @Transactional
-    fun releaseParkingSpot(event: ParkingSpotReleasedEvent) {
+    open fun releaseParkingSpot(event: ParkingSpotReleasedEvent) {
         parkingSpotRepository.releaseParkingSpot(event.spotId.value)
         vehicleTransitRepository.removeVehicleInTransit(event.licensePlate.value)
         processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
     }
 
     @Transactional
-    fun markVehicleAsLeaving(event: VehicleLeavingEvent) {
+    open fun markVehicleAsLeaving(event: VehicleLeavingEvent) {
         vehicleTransitRepository.addVehicleInTransit(event.licensePlate.value)
         processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
     }
 
     @Transactional
-    fun overStaying(event: OverStayingEvent) {
+    open fun overStaying(event: OverStayingEvent) {
         parkingGuardNotifier.vehicleHasOverStayed(event.licensePlate.value, event.spotId.value, event.duration)
         processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, Instant.now())
     }

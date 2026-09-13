@@ -1,14 +1,14 @@
 package parkinglot.simulator
 
 import arrow.core.tail
-import kotlin.system.exitProcess
 import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.boot.CommandLineRunner
+import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Profile
 import org.springframework.stereotype.Component
 import parkinglot.simulator.connector.sensor.system.EventPublisher
-import parkinglot.simulator.connector.sensor.system.adapter.ProcessingStatusSensorEventRepository
+import parkinglot.simulator.domain.repository.ProcessingStatusSensorEventRepository
 import parkinglot.simulator.domain.model.builder.sensorEvents
 import parkinglot.simulator.domain.model.builder.spots
 import parkinglot.simulator.domain.model.LicensePlate
@@ -25,7 +25,8 @@ class DemoParkingLotSimulator(
     private val eventPublisher: EventPublisher,
     private val vehicleTransitRepository: VehicleTransitRepository,
     private val parkingSpotRepository: ParkingSpotRepository,
-    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository
+    private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
+    private val applicationContext: ConfigurableApplicationContext
 ) : CommandLineRunner {
 
     override fun run(vararg args: String) {
@@ -74,8 +75,7 @@ class DemoParkingLotSimulator(
             logger.info("Taken spots: ${occupiedSpots.map { it.value }}")
             logger.info("Vehicles in transit: ${vehicleTransitRepository.getNumberOfVehiclesInTransit()}")
             logger.info("")
-
-            exitProcess(0)
+            applicationContext.close()
         }
         catch (exception: Exception) {
             logger.info("")
@@ -86,8 +86,7 @@ class DemoParkingLotSimulator(
                     logger.error("DemoParkingLotSimulator failed: {}", exception.message, exception)
             }
             logger.info("")
-
-            exitProcess(1)
+            applicationContext.close()
         }
     }
 

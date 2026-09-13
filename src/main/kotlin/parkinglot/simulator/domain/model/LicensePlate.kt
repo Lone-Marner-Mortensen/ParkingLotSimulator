@@ -7,4 +7,8 @@ value class LicensePlate(val value: String) {
             "LicensePlate must be exactly 10 characters long, but was ${value.length}"
         }
     }
+
+    companion object {
+        const val GENERATED_PREFIX = "GEN-"
+    }
 }

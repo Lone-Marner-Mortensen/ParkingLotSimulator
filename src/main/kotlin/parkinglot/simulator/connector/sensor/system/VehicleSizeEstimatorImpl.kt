@@ -9,13 +9,14 @@ import kotlinx.coroutines.delay
 import kotlin.random.Random
 import parkinglot.simulator.domain.model.DenyEntryReason
 import parkinglot.simulator.domain.connector.VehicleSizeEstimator
+import kotlin.time.Duration.Companion.milliseconds
 
 @Component
 class VehicleSizeEstimatorImpl: VehicleSizeEstimator {
 
     override suspend fun isVehicleTooBig(): Either<DenyEntryReason, Boolean> {
 
-        delay(500)
+        delay(500.milliseconds)
 
         if (Random.nextDouble() < 0.005) {
             return DenyEntryReason.TECHNICAL_FAILURE.left()

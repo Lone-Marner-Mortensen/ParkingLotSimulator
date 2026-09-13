@@ -12,29 +12,27 @@ class ParkingSpotRepositoryImpl(
     private val mapper: ParkingSpotEntityMapper
 ) : ParkingSpotRepository {
 
+    @Transactional
     override fun occupyParkingSpot(licensePlate: String, spotId: String) {
         jpaRepository.findById(spotId)
             .map(mapper::toDomain)
             .map { it.copy(licensePlate = licensePlate) }
             .map(mapper::toEntity)
-            .map(jpaRepository::save)
+            .ifPresent(jpaRepository::save)
     }
 
+    @Transactional
     override fun releaseParkingSpot(spotId: String) {
         jpaRepository.findById(spotId)
             .map(mapper::toDomain)
             .map { it.copy(licensePlate = null) }
             .map(mapper::toEntity)
-            .map(jpaRepository::save)
+            .ifPresent(jpaRepository::save)
     }
 
     @Transactional
     override fun releaseAllParkingSpots() {
-        jpaRepository.findAll()
-            .map(mapper::toDomain)
-            .map { it.copy(licensePlate = null) }
-            .map(mapper::toEntity)
-            .let(jpaRepository::saveAll)
+        jpaRepository.releaseAll()
     }
 
     override fun getFreeParkingSpots(): List<String> =

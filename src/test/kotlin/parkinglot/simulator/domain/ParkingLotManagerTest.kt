@@ -10,14 +10,11 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.awaitility.Awaitility.await
-import org.junit.jupiter.api.Assertions.assertTimeoutPreemptively
 import org.junit.jupiter.api.Test
 import parkinglot.simulator.domain.model.LicensePlate
 import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.service.ParkingLifeCycleService
-import java.time.Duration
 import kotlin.test.assertFalse
-import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
 import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
@@ -26,9 +23,9 @@ import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
 import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
 import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
-class ParkingControllerTest {
+class ParkingLotManagerTest {
     private val parkingLifecycleService = mockk<ParkingLifeCycleService>(relaxed = true)
-    private val handler = ParkingController(parkingLifecycleService)
+    private val handler = ParkingLotManager(parkingLifecycleService)
     private val licensePlateValue = LicensePlate("AB123CD123")
     private val spotIdValue = ParkingSpotId("A1")
 
@@ -83,5 +80,31 @@ class ParkingControllerTest {
         await().until { enteringCompleted }
         coVerify(exactly = 1) { parkingLifecycleService.handleVehicleEntering(enteringEvent) }
         verify(exactly = 1) { parkingLifecycleService.releaseParkingSpot(releasedEvent) }
+    }
+
+    @Test
+    fun `close waits for an in-flight handleVehicleEntering coroutine's cleanup to run before returning`() {
+        // when
+        val enteringEvent = VehicleEnteringEvent()
+        val started = CompletableDeferred<Unit>()
+        var cleanupRan = false
+        coEvery { parkingLifecycleService.handleVehicleEntering(enteringEvent) } coAnswers {
+            try {
+                started.complete(Unit)
+                delay(200)
+            } finally {
+                cleanupRan = true
+            }
+        }
+
+        // then
+        runBlocking {
+            handler.handle(enteringEvent)
+            started.await()
+        }
+        handler.close()
+
+        // expect
+        assertTrue(cleanupRan)
     }
 }

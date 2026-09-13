@@ -1,4 +1,4 @@
-package parkinglot.simulator.connector.sensor.system.adapter
+package parkinglot.simulator.repository
 
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeEach
@@ -11,16 +11,17 @@ import org.springframework.test.context.DynamicPropertyRegistry
 import org.springframework.test.context.DynamicPropertySource
 import org.testcontainers.containers.PostgreSQLContainer
 import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
+import parkinglot.simulator.domain.repository.ProcessingStatusSensorEventRepository
+import parkinglot.simulator.repository.jpa.adapter.ProcessingStatusSensorEventEntityRepository
 import java.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @SpringBootTest
 @ActiveProfiles("test")
-class ProcessingStatusSensorEventRepositoryTest {
+class ProcessingStatusSensorEventRepositoryImplTest {
 
     companion object {
         private val postgres: PostgreSQLContainer<*> = PostgreSQLContainer("postgres:16")
@@ -87,49 +88,6 @@ class ProcessingStatusSensorEventRepositoryTest {
         }
     }
 
-    @Nested
-    inner class IsEarlierEventsCompleted {
-        @Test
-        fun `is true when there are no earlier sequence numbers`() {
-            assertTrue(repository.isEarlierEventsCompleted(sequenceNumber = 1))
-        }
-
-        @Test
-        fun `is true when every earlier sequence number has a completed event`() {
-            (1..9).forEach { earlierSequenceNumber ->
-                val earlierEvent = VehicleEnteringEvent()
-                repository.setProcessingStatusToInProgress(earlierEvent, earlierSequenceNumber)
-                repository.setProcessingStatusToCompleted(earlierEvent, Instant.now())
-            }
-
-            assertTrue(repository.isEarlierEventsCompleted(sequenceNumber = 10))
-        }
-
-        @Test
-        fun `is false when an earlier sequence has no event attached to it`() {
-            (1..8).forEach { earlierSequenceNumber ->
-                val earlierEvent = VehicleEnteringEvent()
-                repository.setProcessingStatusToInProgress(earlierEvent, earlierSequenceNumber)
-                repository.setProcessingStatusToCompleted(earlierEvent, Instant.now())
-            }
-            // no events with sequence number 9 registered
-
-            assertFalse(repository.isEarlierEventsCompleted(sequenceNumber = 10))
-        }
-
-        @Test
-        fun `is false when an earlier event is not completed`() {
-            (1..8).forEach { earlierSequenceNumber ->
-                val earlierEvent = VehicleEnteringEvent()
-                repository.setProcessingStatusToInProgress(earlierEvent, earlierSequenceNumber)
-                repository.setProcessingStatusToCompleted(earlierEvent, Instant.now())
-            }
-            val stillProcessingEvent = VehicleEnteringEvent()
-            repository.setProcessingStatusToInProgress(stillProcessingEvent, sequenceNumber = 9)
-
-            assertFalse(repository.isEarlierEventsCompleted(sequenceNumber = 10))
-        }
-    }
 
     @Nested
     inner class IsProcessing {
@@ -184,6 +142,24 @@ class ProcessingStatusSensorEventRepositoryTest {
             repository.setProcessingStatusToInProgress(inProgressEvent, sequenceNumber = 2)
 
             assertFalse(repository.allEventsCompleted(listOf(completedEvent, inProgressEvent)))
+        }
+    }
+
+    @Nested
+    inner class GetMaxSequenceNumber {
+        @Test
+        fun `is 0 when there are no events`() {
+            assertEquals(0, repository.getMaxSequenceNumber())
+        }
+
+        @Test
+        fun `is the highest sequence number across in-progress and completed events`() {
+            repository.setProcessingStatusToInProgress(VehicleEnteringEvent(), sequenceNumber = 5)
+            val completedEvent = VehicleEnteringEvent()
+            repository.setProcessingStatusToInProgress(completedEvent, sequenceNumber = 9)
+            repository.setProcessingStatusToCompleted(completedEvent, Instant.now())
+
+            assertEquals(9, repository.getMaxSequenceNumber())
         }
     }
 }

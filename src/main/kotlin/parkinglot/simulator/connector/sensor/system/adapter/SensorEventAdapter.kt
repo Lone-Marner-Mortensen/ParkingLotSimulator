@@ -22,6 +22,9 @@ import parkinglot.simulator.domain.connector.SensorEventSource
 import parkinglot.simulator.domain.exception.DuplicateEventException
 import parkinglot.simulator.domain.exception.InvalidEventException
 import parkinglot.simulator.domain.validator.EventValidator
+import parkinglot.simulator.domain.repository.ProcessingStatusSensorEventRepository
+import parkinglot.simulator.domain.model.SensorEvent
+import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -34,8 +37,8 @@ class SensorEventAdapter(
     private val eventValidator: EventValidator,
     private val processingStatusSensorEventRepository: ProcessingStatusSensorEventRepository,
     private val meterRegistry: MeterRegistry,
-    @Value("\${parking.sensor.events.earlier-events-poll-interval-ms:30000}")
-    earlierEventsPollIntervalMs: Long = 30_000,
+    @Value("\${parking.sensor.events.earlier-events-poll-interval-ms:300}")
+    earlierEventsPollIntervalMs: Long = 300,
     @Value("\${parking.sensor.events.earlier-events-max-polls:10}")
     private val earlierEventsMaxPolls: Int = 10
 ) : SmartLifecycle {
@@ -50,19 +53,21 @@ class SensorEventAdapter(
     override fun start() {
         if (isRunning) return
 
-        var sequenceNumber = 0;
+        // Resume from the persisted sequence number so ordering survives restarts
+        var sequenceNumber = processingStatusSensorEventRepository.getMaxSequenceNumber()
         consumerJob = scope.launch {
-                eventSource.observeEvents().collect { event ->
-                    if (!eventValidator.isValid(event)) {
-                        awaitEarlierEventsCompletion(sequenceNumber + 1)
+            // All events are processed synchronously except for VehicleEnteringEvent, see eventHandler.handle(event).
+            eventSource.observeEvents().collect { event ->
+                    if (!awaitEventValidity(event)) {
+                        meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
 
-                        if (!eventValidator.isValid(event)) {
-                            meterRegistry.counter("parking.sensor.events", "outcome", "invalid").increment()
-                            throw InvalidEventException(
-                                event,
-                                "Invalid sensor event $event. Event ordering is violated."
-                            )
-                        }
+                        val errorDescription = if (event is ParkingSpotOccupiedEvent)
+                            "A ParkingSpotOccupiedEvent is only valid if the vehicle was already in transit. " +
+                            "At this point, users must manually add the vehicle to vehicleTransitRepository for the event to become valid."
+                        else
+                            "Event ordering is violated."
+
+                        throw InvalidEventException(event, "Invalid sensor event $event. $errorDescription")
                     }
 
                     if (processingStatusSensorEventRepository.isProcessing(event.eventId)) {
@@ -70,7 +75,7 @@ class SensorEventAdapter(
                         throw DuplicateEventException(event, "Duplicate sensor event $event")
                     }
 
-                    sequenceNumber++;
+                    sequenceNumber++
                     processingStatusSensorEventRepository.setProcessingStatusToInProgress(event, sequenceNumber)
 
                     try {
@@ -101,22 +106,21 @@ class SensorEventAdapter(
 
     internal suspend fun awaitFailure(): Nothing = throw failure.await()
 
-    private suspend fun awaitEarlierEventsCompletion(sequenceNumber: Int) {
+    private suspend fun awaitEventValidity(event: SensorEvent): Boolean {
+        // Events may be invalid because prior events has not completed yet.
         repeat(earlierEventsMaxPolls) { attempt ->
-            if (processingStatusSensorEventRepository.isEarlierEventsCompleted(sequenceNumber)) {
-                return
+            if (eventValidator.isValid(event)) {
+                return true
             }
             if (attempt < earlierEventsMaxPolls - 1) {
-                logger.info(
-                    "Waiting for earlier events to be completed before processing event with sequence number {}",
-                    sequenceNumber
-                )
+                logger.info("Waiting for sensor event {} to become valid", event.eventId)
                 delay(earlierEventsPollInterval)
             }
         }
+        return false
     }
 
-    private suspend fun processWithRetry(event: parkinglot.simulator.domain.model.SensorEvent) {
+    private suspend fun processWithRetry(event: SensorEvent) {
         repeat(EVENT_PROCESSING_ATTEMPTS) { attempt ->
             try {
                 eventHandler.handle(event)

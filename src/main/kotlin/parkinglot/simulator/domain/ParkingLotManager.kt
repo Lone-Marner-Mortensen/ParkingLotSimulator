@@ -3,9 +3,11 @@ package parkinglot.simulator.domain
 import jakarta.annotation.PreDestroy
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
 import parkinglot.simulator.domain.service.ParkingLifeCycleService
@@ -18,15 +20,15 @@ import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
 import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
 @Service
-class ParkingController(
+class ParkingLotManager(
     private val parkingLifecycleService: ParkingLifeCycleService
 ) : SensorEventHandler {
-    private val vehicleEnteringScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val vehicleEnteringCoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override suspend fun handle(event: SensorEvent) {
         logger.info("Handling sensor event {}", event)
         when (event) {
-            is VehicleEnteringEvent -> vehicleEnteringScope.launch {
+            is VehicleEnteringEvent -> vehicleEnteringCoroutineScope.launch {
                 parkingLifecycleService.handleVehicleEntering(event)
             }
             is VehicleLeavingEvent ->
@@ -41,10 +43,12 @@ class ParkingController(
 
     @PreDestroy
     fun close() {
-        vehicleEnteringScope.cancel()
+        runBlocking {
+            vehicleEnteringCoroutineScope.coroutineContext[Job]?.cancelAndJoin()
+        }
     }
 
     companion object {
-        private val logger = LoggerFactory.getLogger(ParkingController::class.java)
+        private val logger = LoggerFactory.getLogger(ParkingLotManager::class.java)
     }
 }

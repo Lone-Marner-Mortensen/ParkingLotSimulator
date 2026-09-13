@@ -1,12 +1,12 @@
 package parkinglot.simulator.repository
 
-import org.springframework.stereotype.Component
+import org.springframework.stereotype.Repository
 import parkinglot.simulator.domain.model.VehicleTransit
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
 import parkinglot.simulator.repository.jpa.adapter.VehicleTransitEntityRepository
 import parkinglot.simulator.repository.mapper.VehicleTransitEntityMapper
 
-@Component
+@Repository
 class VehicleTransitRepositoryImpl(
     private val jpaRepository: VehicleTransitEntityRepository,
     private val mapper: VehicleTransitEntityMapper

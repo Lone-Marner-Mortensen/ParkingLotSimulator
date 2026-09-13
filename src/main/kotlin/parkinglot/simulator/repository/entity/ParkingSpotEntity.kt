@@ -11,6 +11,6 @@ class ParkingSpotEntity(
     @Id
     val spot: String,
 
-    @Column(nullable = true)
+    @Column(name = "license_plate", nullable = true)
     val licensePlate: String?
 )

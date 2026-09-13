@@ -11,7 +11,7 @@ Everything depends on the domain, which exposes interfaces to the other componen
 
 ## Overview
 
-The simulator is designed around a `ParkingController` that listens to sensor events such as:
+The simulator is designed around a `ParkingLotManager` that listens to sensor events such as:
 
 | Event | Meaning                                                                                            |
 | --- |----------------------------------------------------------------------------------------------------|
@@ -28,7 +28,11 @@ that vehicle-entering events can not happen concurrently.
 #### Events happens in a certain order
 Event are happening in the following order: Vehicle entering -> parking spot occupied -> vehicle leaving -> parking spot released.
 Sometimes people change their mind about leaving the parking-spot, so 
-vehicle leaving -> parking spot occupied and parking spot released -> vehicle leaving is also allowed. And of course parking spot occupied -> vehicle overstaying is also allowed.
+vehicle leaving -> parking spot occupied and parking spot released -> vehicle leaving is also allowed. 
+And of course parking spot occupied -> vehicle overstaying is also allowed.
+<ins>In short, all event-sequences that make sense are allowed</ins>. 
+Vehicle leaving and vehicle overstaying may occur multiple times in a row. 
+Such repetitions provide no additional benefit, but they do not cause any harm either.
 
 ## Tech stack
 
@@ -73,14 +77,17 @@ the number of vehicles in transit might be lower in rare cases.
 #### Running on a non-predefined event list
 To run the application with a different event list, you currently need to modify DemoParkingLotSimulator manually. </br> 
 
-A user interface for running ParkingLotSimulatorApplication with a non-predefined event list or 
-randomized events has not been implemented yet. </br> 
+<ins>A user interface for running ParkingLotSimulatorApplication with a non-predefined event list or 
+randomized events has not been implemented yet.</ins></br> Also, a vehicle-entering event can only simulate a car
+coming in with an unknown license-plate (in real life you don't know the license-plate until it's scanned); to simulate a car coming in with a certain license-plate, we have to add the car to the vehicleTransitRepository, see DemoParkingLotSimulator. 
+Adding vehicle-entering event with a license-plate is also for next iteration.</br> 
 
 Since the validity of an event can depend on previous events, assessing the validity of a single event may 
 require examining the entire event list. Therefore, early validation—validating all events before the first event is 
 fully processed—would slow down the application and has not been implemented.
+
 ### Stop the app
-Stop the app with `Ctrl+C`, then stop and remove the Postgres container:
+The app exits automatically once it has finished processing the event list. To stop and remove the Postgres container, run:
 
 ```bash
 ./gradlew stop-db

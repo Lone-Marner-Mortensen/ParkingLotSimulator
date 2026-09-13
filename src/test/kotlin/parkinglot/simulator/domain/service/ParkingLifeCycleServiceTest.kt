@@ -2,6 +2,7 @@ package parkinglot.simulator.domain.service
 
 import arrow.core.left
 import arrow.core.right
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -13,7 +14,7 @@ import org.junit.jupiter.api.DynamicTest.dynamicTest
 import org.junit.jupiter.api.Nested
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestFactory
-import parkinglot.simulator.connector.sensor.system.adapter.ProcessingStatusSensorEventRepository
+import parkinglot.simulator.domain.repository.ProcessingStatusSensorEventRepository
 import parkinglot.simulator.domain.connector.LicensePlateReader
 import parkinglot.simulator.domain.connector.ParkingGuardNotifier
 import parkinglot.simulator.domain.connector.PaymentStatusChecker
@@ -24,6 +25,7 @@ import parkinglot.simulator.domain.model.ParkingSpotId
 import parkinglot.simulator.domain.model.SensorEvent
 import parkinglot.simulator.domain.repository.ParkingSpotRepository
 import parkinglot.simulator.domain.repository.VehicleTransitRepository
+import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.time.Duration.Companion.minutes
@@ -47,6 +49,7 @@ class ParkingLifeCycleServiceTest {
     private val licensePlateReader = mockk<LicensePlateReader>()
     private val vehicleSizeEstimator = mockk<VehicleSizeEstimator>()
     private val paymentStatusChecker = mockk<PaymentStatusChecker>()
+    private val meterRegistry = SimpleMeterRegistry()
     private val service = ParkingLifeCycleService(
         parkingSpotRepository,
         vehicleTransitRepository,
@@ -54,7 +57,8 @@ class ParkingLifeCycleServiceTest {
         parkingGuardNotifier,
         licensePlateReader,
         vehicleSizeEstimator,
-        paymentStatusChecker
+        paymentStatusChecker,
+        meterRegistry
     )
     private val licensePlate = "AB123CD123"
     private val spotId = "A1"
@@ -111,14 +115,14 @@ class ParkingLifeCycleServiceTest {
             fun `entry denied`() =
                 listOf(
                     DenialCase("vehicle is too big", DenyEntryReason.VEHICLE_TOO_BIG) {
-                        coEvery { licensePlateReader.read() } returns licensePlate.right()
+                        coEvery { licensePlateReader.read() } returns licensePlateValue.right()
                         coEvery {
                             vehicleSizeEstimator.isVehicleTooBig()
                         } returns DenyEntryReason.VEHICLE_TOO_BIG.left()
                         coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
                     },
                     DenialCase("payment fails", DenyEntryReason.PAYMENT_NOT_ACCEPTED) {
-                        coEvery { licensePlateReader.read() } returns licensePlate.right()
+                        coEvery { licensePlateReader.read() } returns licensePlateValue.right()
                         coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
                         coEvery {
                             paymentStatusChecker.wasPaymentSuccessful()
@@ -130,7 +134,7 @@ class ParkingLifeCycleServiceTest {
                         coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
                     },
                     DenialCase("no free spots", DenyEntryReason.NO_AVAILABLE_PARKING_SPOTS) {
-                        coEvery { licensePlateReader.read() } returns licensePlate.right()
+                        coEvery { licensePlateReader.read() } returns licensePlateValue.right()
                         coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
                         coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
                         every { parkingSpotRepository.getFreeParkingSpots() } returns emptyList()
@@ -154,7 +158,7 @@ class ParkingLifeCycleServiceTest {
         @Test
         fun `handleVehicleEntering retries reserving capacity multiple times until it becomes available`() = runTest {
             // when
-            coEvery { licensePlateReader.read() } returns licensePlate.right()
+            coEvery { licensePlateReader.read() } returns licensePlateValue.right()
             coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
             coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
             // checking capacity
@@ -174,7 +178,7 @@ class ParkingLifeCycleServiceTest {
         @Test
         fun `parking lot entry granted when all checks pass and a spot is available`() = runTest {
             // when
-            coEvery { licensePlateReader.read() } returns licensePlate.right()
+            coEvery { licensePlateReader.read() } returns licensePlateValue.right()
             coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
             coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
             every { parkingSpotRepository.getFreeParkingSpots() } returns listOf(spotId)
@@ -189,7 +193,7 @@ class ParkingLifeCycleServiceTest {
 
         @Test
         fun `vehicle entering event completes the event once handled`() = runTest {
-            coEvery { licensePlateReader.read() } returns licensePlate.right()
+            coEvery { licensePlateReader.read() } returns licensePlateValue.right()
             coEvery { vehicleSizeEstimator.isVehicleTooBig() } returns false.right()
             coEvery { paymentStatusChecker.wasPaymentSuccessful() } returns true.right()
             every { parkingSpotRepository.getFreeParkingSpots() } returns listOf(spotId)
@@ -201,6 +205,23 @@ class ParkingLifeCycleServiceTest {
             await().untilAsserted {
                 verify { processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, any()) }
             }
+        }
+
+        @Test
+        fun `a failure is caught, recorded and still completes the event instead of being lost`() = runTest {
+            // when
+            val event = VehicleEnteringEvent()
+            coEvery { licensePlateReader.read() } throws IllegalStateException("persistence unavailable")
+
+            // then
+            service.handleVehicleEntering(event)
+
+            // expect
+            assertEquals(
+                1.0,
+                meterRegistry.counter("parking.controller.vehicle_entering", "outcome", "failed").count()
+            )
+            verify { processingStatusSensorEventRepository.setProcessingStatusToCompleted(event, any()) }
         }
     }
 }

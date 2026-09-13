@@ -33,6 +33,7 @@ import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
 import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
 import parkinglot.simulator.domain.model.SensorEvent.VehicleEnteringEvent
 import parkinglot.simulator.domain.validator.EventValidator
+import parkinglot.simulator.domain.repository.ProcessingStatusSensorEventRepository
 import kotlinx.coroutines.delay
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -160,83 +161,11 @@ class SensorEventAdapterTest {
 
     @Nested
     inner class InvalidEvents {
-        val earlierEvent1 = VehicleEnteringEvent()
-        val earlierEvent2 = VehicleEnteringEvent()
-
-        private fun eventValidatorWithEarlierEventsValid(currentEventsValidityResults: List<Boolean>) =
-            mockk<EventValidator> {
-                every { isValid(earlierEvent1) } returns true
-                every { isValid(earlierEvent2) } returns true
-                every { isValid(event) } returnsMany currentEventsValidityResults
-            }
-
         @Test
-        fun `event still invalid after waiting for earlier events to complete throws exception and stop program`() {
+        fun `event still invalid after polling throws exception and stops program`() {
             // when
-            val eventValidator = eventValidatorWithEarlierEventsValid(listOf(false, false))
-            coEvery { eventHandler.handle(any()) } just Runs
-            every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
-            every {
-                processingStatusSensorEventRepository.isEarlierEventsCompleted(3)
-            } returnsMany listOf(false, false, true)
-            val adapter = sensorEventAdapter(eventValidator = eventValidator)
-
-            try {
-                // then
-                adapter.start()
-                publisher.simulateEventEmissions(listOf(earlierEvent1, earlierEvent2, event))
-
-                // expect
-                coVerify(timeout = 1_000) { eventHandler.handle(earlierEvent2) }
-                verify(timeout = 1_000, exactly = 2) { eventValidator.isValid(event) }
-                verify(exactly = 3) { processingStatusSensorEventRepository.isEarlierEventsCompleted(3) }
-                coVerify(exactly = 0) { eventHandler.handle(event) }
-
-                assertThrows<InvalidEventException> {
-                    runBlocking { adapter.awaitFailure() }
-                }
-                await().until { !adapter.isRunning }
-            } finally {
-                adapter.close()
-            }
-        }
-
-        @Test
-        fun `invalid event becomes valid after waiting for earlier events to complete`() {
-            // when
-            val eventValidator = eventValidatorWithEarlierEventsValid(listOf(false, true))
-            coEvery { eventHandler.handle(any()) } just Runs
-            every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
-            every {
-                processingStatusSensorEventRepository.isEarlierEventsCompleted(3)
-            } returnsMany listOf(false, false, true)
-            val adapter = sensorEventAdapter(eventValidator = eventValidator)
-
-            try {
-                // then
-                adapter.start()
-                publisher.simulateEventEmissions(listOf(earlierEvent1, earlierEvent2, event))
-
-                // expect
-                verify(timeout = 1_000, exactly = 3) {
-                    processingStatusSensorEventRepository.isEarlierEventsCompleted(3)
-                }
-                verify(exactly = 2) { eventValidator.isValid(event) }
-                assertTrue(adapter.isRunning)
-            } finally {
-                adapter.close()
-            }
-        }
-
-        @Test
-        fun `gives up waiting for earlier events to be completed (needed for event-validation) after a bounded number of polls and throws exception and program stops`() {
-            // when
-            val eventValidator = mockk<EventValidator> { every { isValid(any()) } returns false }
-            every { processingStatusSensorEventRepository.isEarlierEventsCompleted(1) } returns false
-            val adapter = sensorEventAdapter(
-                eventValidator = eventValidator,
-                earlierEventsMaxPolls = 3
-            )
+            val eventValidator = mockk<EventValidator> { every { isValid(event) } returns false }
+            val adapter = sensorEventAdapter(eventValidator = eventValidator, earlierEventsMaxPolls = 3)
 
             try {
                 // then
@@ -244,9 +173,7 @@ class SensorEventAdapterTest {
                 publisher.simulateEventEmissions(listOf(event))
 
                 // expect
-                verify(timeout = 1_000, exactly = 3) {
-                    processingStatusSensorEventRepository.isEarlierEventsCompleted(1)
-                }
+                verify(timeout = 1_000, exactly = 3) { eventValidator.isValid(event) }
                 assertThrows<InvalidEventException> {
                     runBlocking { adapter.awaitFailure() }
                 }
@@ -255,6 +182,29 @@ class SensorEventAdapterTest {
                 adapter.close()
             }
         }
+
+        @Test
+        fun `invalid event becomes valid after polling and is then processed`() {
+            // when
+            val eventValidator = mockk<EventValidator> { every { isValid(event) } returnsMany listOf(false, false, true) }
+            coEvery { eventHandler.handle(any()) } just Runs
+            every { processingStatusSensorEventRepository.isProcessing(any()) } returns false
+            val adapter = sensorEventAdapter(eventValidator = eventValidator)
+
+            try {
+                // then
+                adapter.start()
+                publisher.simulateEventEmissions(listOf(event))
+
+                // expect
+                coVerify(timeout = 1_000) { eventHandler.handle(event) }
+                verify(exactly = 3) { eventValidator.isValid(event) }
+                assertTrue(adapter.isRunning)
+            } finally {
+                adapter.close()
+            }
+        }
+
 
     @Nested
     inner class Concurrency {

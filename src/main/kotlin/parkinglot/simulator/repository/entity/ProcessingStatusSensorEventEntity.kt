@@ -1,4 +1,4 @@
-package parkinglot.simulator.connector.sensor.system.adapter
+package parkinglot.simulator.repository.entity
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

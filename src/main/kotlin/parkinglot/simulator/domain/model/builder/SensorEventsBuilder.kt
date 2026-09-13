@@ -10,6 +10,10 @@ import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotOccupiedEvent
 import parkinglot.simulator.domain.model.SensorEvent.ParkingSpotReleasedEvent
 import parkinglot.simulator.domain.model.SensorEvent.OverStayingEvent
 
+@DslMarker
+annotation class SensorEventsDsl
+
+@SensorEventsDsl
 class SensorEventsBuilder {
     private val events = mutableListOf<SensorEvent>()
 

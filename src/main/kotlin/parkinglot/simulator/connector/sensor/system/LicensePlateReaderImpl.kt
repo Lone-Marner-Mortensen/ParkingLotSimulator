@@ -8,13 +8,15 @@ import org.springframework.stereotype.Component
 import kotlin.random.Random
 import parkinglot.simulator.domain.model.DenyEntryReason
 import parkinglot.simulator.domain.connector.LicensePlateReader
+import parkinglot.simulator.domain.model.LicensePlate
+import kotlin.time.Duration.Companion.milliseconds
 
 @Component
 class LicensePlateReaderImpl: LicensePlateReader {
 
-    override suspend fun read(): Either<DenyEntryReason, String> {
+    override suspend fun read(): Either<DenyEntryReason, LicensePlate> {
 
-        delay(500)
+        delay(500.milliseconds)
 
         if (Random.nextDouble() < 0.005) {
             return DenyEntryReason.TECHNICAL_FAILURE.left()
@@ -24,10 +26,10 @@ class LicensePlateReaderImpl: LicensePlateReader {
             return DenyEntryReason.LICENSE_PLATE_NOT_READABLE.left()
         }
 
-        val plate = (1..10)
+        val plate = LicensePlate.GENERATED_PREFIX + (1..6)
             .map { ('a'..'z').random(Random) }
             .joinToString("")
 
-        return plate.right()
+        return LicensePlate(plate).right()
     }
 }
